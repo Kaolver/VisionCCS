@@ -15,6 +15,9 @@ CONFIG = {
     'n_samples': 200, 
     'batch_size': 10,
     
+    # Cache control
+    'use_cache': True,  # Set to False to force re-extraction of hidden states
+    
     # Paths
     'vqa_json': './vqav2_filtered_categorized_checkpoint_7200_fixed.json',
     'image_dir': '/scratch-nvme/ml-datasets/coco/train/data',
@@ -63,13 +66,18 @@ def extract_in_batches(pairs, config, category):
     # Check if already cached (category-specific cache)
     n = len(pairs)
     cache_file = cache_dir / f"cache_{category}_{n}_vit.npz"
-    if cache_file.exists():
+    
+    if config['use_cache'] and cache_file.exists():
         print("\nFound cached hidden states!")
         print("Loading from cache...")
         data = np.load(cache_file)
         return data['pos_hiddens'], data['neg_hiddens'], data['labels']
     
-    print("\nNo cache found. Extracting...")
+    if not config['use_cache']:
+        print("\nCache disabled (use_cache=False). Extracting fresh hidden states...")
+    else:
+        print("\nNo cache found. Extracting...")
+    
     print(f"Processing {len(pairs)} samples in batches of {config['batch_size']}")
     
     # Load lightweight model
@@ -84,7 +92,7 @@ def extract_in_batches(pairs, config, category):
     model = model.to(device)
     model.eval()
     
-    print("Model loaded (much faster than LLaVA!)\n")
+    print("--- Model loaded ---\n")
     
     # Extract in batches
     all_pos_hiddens = []
