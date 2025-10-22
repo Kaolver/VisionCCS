@@ -1,6 +1,14 @@
 import torch
-from transformers import LlavaProcessor, LlavaForConditionalGeneration
+from transformers import (
+    LlavaProcessor,
+    LlavaForConditionalGeneration,
+    AutoProcessor,
+    AutoModelForCausalLM,
+    AutoTokenizer
+)
+import tempfile
 from PIL import Image
+import os
 import json
 import numpy as np
 from pathlib import Path
@@ -34,9 +42,14 @@ CONFIG = {
     'categories': ['object_detection', 'attribute_recognition', 'spatial_recognition'],
     
     # Model
-    'model_name': 'llava-hf/llava-1.5-7b-hf',
+    'model_llava': 'llava-hf/llava-1.5-7b-hf',
+    'model_qwen': 'Qwen/Qwen-VL-Chat',
+
+    # Choose model: 'llava' or 'qwen'
+    'chosen_model': 'qwen',
+    # Optional: Hugging Face token for private/gated repos. If None, will use HF cache/login.
+    'hf_token': None,
     
-    # CCS training (following original paper methodology)
     'train_split': 0.7,  # 70% train, 30% test
     'ccs_epochs': 1000,  # Original uses 1000 epochs
     'ccs_ntries': 10,  # Multiple random restarts to avoid local minima
@@ -67,7 +80,6 @@ def load_vqa_data(config, category):
     pairs = []
     for item in samples:
         q = item['question'].rstrip('?')
-        # Ensure image_id is a string
         img_id = item['image_id']
         if isinstance(img_id, int):
             img_id = f"{img_id:012d}.jpg"  # Convert int to zero-padded filename
@@ -102,7 +114,8 @@ def extract_in_batches(pairs, config, category):
     
     # Check cache
     n = len(pairs)
-    cache_file = cache_dir / f"cache_{category}_{n}_llava.npz"
+    model_tag = config['chosen_model']
+    cache_file = cache_dir / f"cache_{category}_{n}_{model_tag}.npz"
     
     if config['use_cache'] and cache_file.exists():
         print("✓ Found cached hidden states!")
@@ -118,32 +131,58 @@ def extract_in_batches(pairs, config, category):
     
     print(f"\nProcessing {len(pairs)} samples in batches of {config['batch_size']}")
     print(f"Searching in {len(config['image_dirs'])} image directories")
-    
-    # Load LLaVA model
-    print(f"\n{'='*70}")
-    print(f"LOADING LLAVA MODEL: {config['model_name']}")
-    print(f"{'='*70}")
+
+    # Load model according to chosen_model
+    print(f"LOADING MODEL: {config['chosen_model']}")
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Device: {device}")
     
     if device == "cpu":
-        print("⚠ WARNING: Running on CPU will be VERY slow!")
-    
-    # Load with legacy tokenizer to avoid enum ModelWrapper error
-    processor = LlavaProcessor.from_pretrained(
-        config['model_name'],
-        use_fast=False  # Use slow tokenizer to avoid version conflicts
-    )
-    model = LlavaForConditionalGeneration.from_pretrained(
-        config['model_name'],
-        torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-        device_map="auto" if device == "cuda" else None,
-    )
-    
-    if device == "cpu":
-        model = model.to(device)
-    
+        print("WARNING: Running on CPU!")
+
+    chosen_model = config['chosen_model']
+
+    if chosen_model == 'llava':
+        processor = LlavaProcessor.from_pretrained(
+            config['model_llava'],
+            use_fast=False  # Use slow tokenizer to avoid version conflicts
+        )
+        model = LlavaForConditionalGeneration.from_pretrained(
+            config['model_llava'],
+            torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+            device_map="auto" if device == "cuda" else None,
+        )
+        if device == "cpu":
+            model = model.to(device)
+    else: # Qwen
+        # Qwen-VL uses custom processing classes, not standard AutoProcessor
+        # Load tokenizer and model separately with trust_remote_code
+        hf_token = config.get('hf_token') or os.environ.get('HF_TOKEN')
+        
+        tokenizer = AutoTokenizer.from_pretrained(
+            config['model_qwen'],
+            trust_remote_code=True,
+            use_auth_token=hf_token,
+        )
+        
+        # Load Qwen-VL model without device_map to avoid 'meta' device issues
+        # The model will auto-convert to bf16 on CUDA
+        model = AutoModelForCausalLM.from_pretrained(
+            config['model_qwen'],
+            trust_remote_code=True,
+            use_auth_token=hf_token,
+        ).eval()
+        
+        # Manually move to device after loading
+        if device == "cuda":
+            model = model.cuda()
+        else:
+            model = model.to(device)
+        
+        # For Qwen-VL, we use the tokenizer directly (no separate processor)
+        processor = tokenizer
+
     model.eval()
     print("✓ Model loaded successfully\n")
     
@@ -166,16 +205,25 @@ def extract_in_batches(pairs, config, category):
             
             try:
                 image = Image.open(image_path).convert('RGB')
-                
-                # Extract positive (Yes)
-                pos_h = extract_one_llava(
-                    model, processor, image, pair['pos_text'], device
-                )
-                
-                # Extract negative (No)
-                neg_h = extract_one_llava(
-                    model, processor, image, pair['neg_text'], device
-                )
+
+                if config['chosen_model'] == 'llava':
+                    # Extract positive (Yes)
+                    pos_h = extract_one_llava(
+                        model, processor, image, pair['pos_text'], device
+                    )
+                    # Extract negative (No)
+                    neg_h = extract_one_llava(
+                        model, processor, image, pair['neg_text'], device
+                    )
+                else: # 'qwen'
+                    # Extract positive (Yes)
+                    pos_h = extract_one_qwen(
+                        model, processor, image, pair['pos_text'], device
+                    )
+                    # Extract negative (No)
+                    neg_h = extract_one_qwen(
+                        model, processor, image, pair['neg_text'], device
+                    )
                 
                 all_pos_hiddens.append(pos_h)
                 all_neg_hiddens.append(neg_h)
@@ -199,8 +247,6 @@ def extract_in_batches(pairs, config, category):
     gc.collect()
     
     print(f"\n{'='*70}")
-    print(f"EXTRACTION COMPLETE")
-    print(f"{'='*70}")
     print(f"✓ Successfully processed: {len(all_pos_hiddens)}/{len(pairs)}")
     print(f"✗ Skipped (missing/error): {len(skipped)}/{len(pairs)}")
     
@@ -232,7 +278,6 @@ def extract_in_batches(pairs, config, category):
 def extract_one_llava(model, processor, image, text, device):
     """Extract hidden state from LLaVA for a single image-text pair."""
     
-    # Simple prompt format for LLaVA 1.5
     prompt = f"USER: <image>\n{text}\nASSISTANT:"
     
     # Process inputs
@@ -241,8 +286,11 @@ def extract_one_llava(model, processor, image, text, device):
         text=prompt,
         return_tensors="pt",
         padding=True
-    ).to(device)
-    
+    )
+
+    # Move tensors to device if necessary
+    inputs = {k: v.to(device) if hasattr(v, 'to') else v for k, v in inputs.items()}
+
     # Extract hidden states
     with torch.no_grad():
         outputs = model(
@@ -250,13 +298,56 @@ def extract_one_llava(model, processor, image, text, device):
             output_hidden_states=True,
             return_dict=True
         )
-        
+
         # Use LAST TOKEN hidden state
         # outputs.hidden_states[-1] has shape [batch_size, seq_len, hidden_dim]
         # Take the last token position: [:, -1, :]
         hidden = outputs.hidden_states[-1][:, -1, :].squeeze(0)
     
     return hidden.cpu().float().numpy()
+
+
+def extract_one_qwen(model, tokenizer, image, text, device):
+    """Extract hidden state from Qwen-VL for a single image-text pair.
+    
+    Qwen-VL uses a special format where images are embedded via tokenizer.from_list_format.
+    """
+    
+    # Save image temporarily (Qwen-VL expects image path or PIL)
+    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+        image.save(tmp.name)
+        image_path = tmp.name
+    
+    try:
+        # Qwen-VL query format: list of dicts with 'image' and 'text' keys
+        query = tokenizer.from_list_format([
+            {'image': image_path},
+            {'text': text},
+        ])
+        
+        # Tokenize the query
+        inputs = tokenizer(query, return_tensors='pt')
+        
+        # Move to device
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+        
+        # Extract hidden states
+        with torch.no_grad():
+            outputs = model(
+                **inputs,
+                output_hidden_states=True,
+                return_dict=True
+            )
+        
+        # Use LAST TOKEN hidden state (aligns with CCS paper)
+        hidden = outputs.hidden_states[-1][:, -1, :].squeeze(0)
+        
+        return hidden.cpu().float().numpy()
+    
+    finally:
+        # Clean up temp file
+        if os.path.exists(image_path):
+            os.unlink(image_path)
 
 
 def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
@@ -448,13 +539,9 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
 
 def main():
     """Main VisionCCS pipeline."""
-    print("\n" + "="*70)
-    print(" " * 15 + "VISIONCCS PIPELINE")
-    print(" " * 10 + "LLaVA + CCS (Original Methodology)")
-    print("="*70)
-    
+    chosen_model = CONFIG[f"model_{CONFIG['chosen_model']}"]
     print(f"\nConfiguration:")
-    print(f"  Model: {CONFIG['model_name']}")
+    print(f"  Model: {chosen_model}")
     print(f"  Samples per category:")
     print(f"    - object_detection: {CONFIG['n_samples_object_detection']}")
     print(f"    - attribute_recognition: {CONFIG['n_samples_attribute_recognition']}")
@@ -495,8 +582,6 @@ def main():
     
     # Final summary
     print(f"\n{'='*70}")
-    print(f"ALL EXPERIMENTS FINISHED")
-    print(f"{'='*70}")
     print(f"\nFinal Results:")
     for category, acc in all_results.items():
         print(f"  {category:25s}: {acc:5.1%}")
