@@ -44,9 +44,10 @@ CONFIG = {
     # Model
     'model_llava': 'llava-hf/llava-1.5-7b-hf',
     'model_qwen': 'Qwen/Qwen-VL-Chat',
+    'model_qwen2': 'Qwen/Qwen2-VL-7B-Instruct',
 
     # Choose model: 'llava' or 'qwen'
-    'chosen_model': 'qwen',
+    'chosen_model': 'qwen2',
     # Optional: Hugging Face token for private/gated repos. If None, will use HF cache/login.
     'hf_token': None,
     
