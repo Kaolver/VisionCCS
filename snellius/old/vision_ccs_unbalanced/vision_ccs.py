@@ -6,19 +6,10 @@ import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 import gc
-import torch.nn as nn
-import torch.optim as optim
-import copy
-from sklearn.model_selection import train_test_split
 
-
-dataset = json.load(open('vqav2_mapped.json', 'r'))
-distribution = {category: len(items) for category, items in dataset.items()}
 
 CONFIG = {
-    'n_samples_object_detection': distribution.get('object_detection', 0),
-    'n_samples_attribute_recognition': distribution.get('attribute_recognition', 0),
-    'n_samples_spatial_recognition': distribution.get('spatial_recognition', 0),
+    'n_samples': 1000,  # Samples per category
     'batch_size': 40,
     
     # Cache control
@@ -34,7 +25,7 @@ CONFIG = {
     'categories': ['object_detection', 'attribute_recognition', 'spatial_recognition'],
     
     # Model
-    'model_name': 'llava-hf/llava-1.5-7b-hf',
+    'model_name': 'llava-hf/llava-1.5-7b-hf',  # LLaVA 1.5 with Vicuna-7B
     
     # CCS training (following original paper methodology)
     'train_split': 0.7,  # 70% train, 30% test
@@ -55,19 +46,15 @@ def load_vqa_data(config, category):
         all_data = json.load(f)
         vqa_data = all_data[category]
     
-    # Get category-specific sample count
-    n_samples_key = f'n_samples_{category}'
-    n_samples = config.get(n_samples_key, len(vqa_data))
-    
     # Take first N samples for this category
-    samples = vqa_data[:n_samples]
+    samples = vqa_data[:config['n_samples']]
     print(f"Using {len(samples)} samples from '{category}'")
     
     # Create contrast pairs
     pairs = []
     for item in samples:
         q = item['question'].rstrip('?')
-        # Ensure image_id is a string
+        # Ensure image_id is a string (handle both int and str formats)
         img_id = item['image_id']
         if isinstance(img_id, int):
             img_id = f"{img_id:012d}.jpg"  # Convert int to zero-padded filename
@@ -224,7 +211,7 @@ def extract_in_batches(pairs, config, category):
              pos_hiddens=pos_hiddens, 
              neg_hiddens=neg_hiddens, 
              labels=labels)
-    print(f"\nCached to: {cache_file}")
+    print(f"\n💾 Cached to: {cache_file}")
     
     return pos_hiddens, neg_hiddens, labels
 
@@ -251,10 +238,9 @@ def extract_one_llava(model, processor, image, text, device):
             return_dict=True
         )
         
-        # Use LAST TOKEN hidden state
+        # Use last hidden state from language model, averaged across tokens
         # outputs.hidden_states[-1] has shape [batch_size, seq_len, hidden_dim]
-        # Take the last token position: [:, -1, :]
-        hidden = outputs.hidden_states[-1][:, -1, :].squeeze(0)
+        hidden = outputs.hidden_states[-1].mean(dim=1).squeeze(0)
     
     return hidden.cpu().float().numpy()
 
@@ -264,7 +250,11 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
     print(f"\n{'='*70}")
     print(f"TRAINING CCS PROBE")
     print(f"{'='*70}")
-
+    
+    import torch.nn as nn
+    import torch.optim as optim
+    import copy
+    
     # Convert to tensors
     pos_hiddens = torch.FloatTensor(pos_hiddens)
     neg_hiddens = torch.FloatTensor(neg_hiddens)
@@ -274,34 +264,19 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
     pos_hiddens = pos_hiddens - pos_hiddens.mean(dim=0)
     neg_hiddens = neg_hiddens - neg_hiddens.mean(dim=0)
     
-    # Stratified train/test split to maintain class balance    
+    # Train/test split
     n = len(labels)
-    indices = np.arange(n)
+    n_train = int(config['train_split'] * n)
     
-    # Stratified split maintains class proportions
-    train_idx, test_idx = train_test_split(
-        indices, 
-        test_size=1 - config['train_split'],
-        stratify=labels,
-        random_state=42
-    )
+    pos_train = pos_hiddens[:n_train]
+    neg_train = neg_hiddens[:n_train]
+    pos_test = pos_hiddens[n_train:]
+    neg_test = neg_hiddens[n_train:]
+    labels_test = labels[n_train:]
     
-    pos_train = pos_hiddens[train_idx]
-    neg_train = neg_hiddens[train_idx]
-    pos_test = pos_hiddens[test_idx]
-    neg_test = neg_hiddens[test_idx]
-    labels_test = labels[test_idx]
-    
-    n_train = len(train_idx)
-    n_test = len(test_idx)
-    n_train_pos = (labels[train_idx] == 1).sum()
-    n_train_neg = (labels[train_idx] == 0).sum()
-    n_test_pos = (labels_test == 1).sum()
-    n_test_neg = (labels_test == 0).sum()
-    
-    print(f"\nDataset split (Stratified):")
-    print(f"  Train: {n_train} samples ({n_train_pos} pos, {n_train_neg} neg)")
-    print(f"  Test:  {n_test} samples ({n_test_pos} pos, {n_test_neg} neg)")
+    print(f"\nDataset split:")
+    print(f"  Train: {n_train} samples")
+    print(f"  Test:  {n - n_train} samples")
     print(f"  Hidden dim: {pos_hiddens.shape[1]}")
     
     # Define probe network
@@ -405,36 +380,29 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
         preds = (probs > 0.5).numpy()
     
     # Calculate metrics
-    raw_accuracy = (preds == labels_test).mean()
+    accuracy = (preds == labels_test).mean()
     
     # CRITICAL FIX #2: Handle label ambiguity
     # CCS doesn't know if it learned "truth=1" or "truth=0"
-    # Determine if we need to flip labels
-    if raw_accuracy < 0.5:
-        # Probe learned inverted labels
-        accuracy = 1 - raw_accuracy
-        # Flip predictions to get correct count
-        preds_corrected = 1 - preds
-        correct = (preds_corrected == labels_test).sum()
-    else:
-        # Probe learned correct labels
-        accuracy = raw_accuracy
-        preds_corrected = preds
-        correct = (preds == labels_test).sum()
+    # Take max to handle both cases
+    accuracy = max(accuracy, 1 - accuracy)
     
+    correct = (preds == labels_test).sum()
     total = len(labels_test)
     
-    # Class-wise accuracy (use corrected predictions)
+    # Class-wise accuracy
     pos_mask = labels_test == 1
     neg_mask = labels_test == 0
     
     if pos_mask.sum() > 0:
-        pos_acc = (preds_corrected[pos_mask] == labels_test[pos_mask]).mean()
+        pos_acc = (preds[pos_mask] == labels_test[pos_mask]).mean()
+        pos_acc = max(pos_acc, 1 - pos_acc)  # Also correct for ambiguity
     else:
         pos_acc = 0.0
     
     if neg_mask.sum() > 0:
-        neg_acc = (preds_corrected[neg_mask] == labels_test[neg_mask]).mean()
+        neg_acc = (preds[neg_mask] == labels_test[neg_mask]).mean()
+        neg_acc = max(neg_acc, 1 - neg_acc)  # Also correct for ambiguity
     else:
         neg_acc = 0.0
     
@@ -455,10 +423,7 @@ def main():
     
     print(f"\nConfiguration:")
     print(f"  Model: {CONFIG['model_name']}")
-    print(f"  Samples per category:")
-    print(f"    - object_detection: {CONFIG['n_samples_object_detection']}")
-    print(f"    - attribute_recognition: {CONFIG['n_samples_attribute_recognition']}")
-    print(f"    - spatial_recognition: {CONFIG['n_samples_spatial_recognition']}")
+    print(f"  Samples per category: {CONFIG['n_samples']}")
     print(f"  Batch size: {CONFIG['batch_size']}")
     print(f"  Cache enabled: {CONFIG['use_cache']}")
     print(f"  Categories: {', '.join(CONFIG['categories'])}")
