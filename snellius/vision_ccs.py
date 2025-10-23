@@ -2,7 +2,6 @@ import torch
 from transformers import (
     LlavaProcessor,
     LlavaForConditionalGeneration,
-    AutoProcessor,
     AutoModelForCausalLM,
     AutoTokenizer
 )
@@ -38,7 +37,7 @@ CONFIG = {
         '/scratch-nvme/ml-datasets/coco/train/data',
         '/scratch-nvme/ml-datasets/coco/val/data',  # Fallback for validation images
     ],
-    'cache_dir': './hidden_states_cache',
+    'cache_dir': './hidden_states_cache_corrected',
     'categories': ['object_detection', 'attribute_recognition', 'spatial_recognition'],
     
     # Model
@@ -46,9 +45,9 @@ CONFIG = {
     'model_qwen': 'Qwen/Qwen-VL-Chat',
     'model_qwen2': 'Qwen/Qwen2-VL-7B-Instruct',
 
-    # Choose model: 'llava' or 'qwen'
-    'chosen_model': 'qwen2',
-    # Optional: Hugging Face token for private/gated repos. If None, will use HF cache/login.
+    # Choose model: 'llava' or 'qwen' or 'qwen2'
+    'chosen_model': 'llava',
+    
     'hf_token': None,
     
     'train_split': 0.7,  # 70% train, 30% test
@@ -56,26 +55,19 @@ CONFIG = {
     'ccs_ntries': 10,  # Multiple random restarts to avoid local minima
     'ccs_lr': 1e-3,
     'ccs_weight_decay': 0.01,  # L2 regularization
-    'probe_hidden_dim': 256,  # Hidden layer size for probe
 }
 
 
 def load_vqa_data(config, category):
     """Load data for a specific category from the categorized VQA JSON."""
-    print(f"LOADING DATA for category: '{category}'")
-    
     data_path = Path(config['vqa_json'])
     with open(data_path, 'r') as f:
         all_data = json.load(f)
         vqa_data = all_data[category]
     
-    # Get category-specific sample count
     n_samples_key = f'n_samples_{category}'
     n_samples = config.get(n_samples_key, len(vqa_data))
-    
-    # Take first N samples for this category
     samples = vqa_data[:n_samples]
-    print(f"Using {len(samples)} samples from '{category}'")
     
     # Create contrast pairs
     pairs = []
@@ -84,6 +76,7 @@ def load_vqa_data(config, category):
         img_id = item['image_id']
         if isinstance(img_id, int):
             img_id = f"{img_id:012d}.jpg"  # Convert int to zero-padded filename
+
         pairs.append({
             'image_id': img_id,
             'question': q,
@@ -156,13 +149,16 @@ def extract_in_batches(pairs, config, category):
         )
         if device == "cpu":
             model = model.to(device)
-    else: # Qwen
+    else: # Qwen (qwen or qwen2)
         # Qwen-VL uses custom processing classes, not standard AutoProcessor
         # Load tokenizer and model separately with trust_remote_code
         hf_token = config.get('hf_token') or os.environ.get('HF_TOKEN')
         
+        # Select correct model path based on chosen_model
+        model_path = config[f'model_{chosen_model}']
+        
         tokenizer = AutoTokenizer.from_pretrained(
-            config['model_qwen'],
+            model_path,
             trust_remote_code=True,
             use_auth_token=hf_token,
         )
@@ -170,7 +166,7 @@ def extract_in_batches(pairs, config, category):
         # Load Qwen-VL model without device_map to avoid 'meta' device issues
         # The model will auto-convert to bf16 on CUDA
         model = AutoModelForCausalLM.from_pretrained(
-            config['model_qwen'],
+            model_path,
             trust_remote_code=True,
             use_auth_token=hf_token,
         ).eval()
@@ -300,7 +296,7 @@ def extract_one_llava(model, processor, image, text, device):
             return_dict=True
         )
 
-        # Use LAST TOKEN hidden state
+        # Use LAST TOKEN hidden state -- last token pooling / alternative: mean pooling
         # outputs.hidden_states[-1] has shape [batch_size, seq_len, hidden_dim]
         # Take the last token position: [:, -1, :]
         hidden = outputs.hidden_states[-1][:, -1, :].squeeze(0)
@@ -352,7 +348,6 @@ def extract_one_qwen(model, tokenizer, image, text, device):
 
 
 def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
-    """Train CCS probe with consistency loss following original methodology."""
     print(f"\n{'='*70}")
     print(f"TRAINING CCS PROBE")
     print(f"{'='*70}")
@@ -360,11 +355,6 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
     # Convert to tensors
     pos_hiddens = torch.FloatTensor(pos_hiddens)
     neg_hiddens = torch.FloatTensor(neg_hiddens)
-    
-    # CRITICAL FIX #1: Normalize independently (remove cluster bias)
-    # This ensures the probe learns truth, not just "Yes" vs "No" tokens
-    pos_hiddens = pos_hiddens - pos_hiddens.mean(dim=0)
-    neg_hiddens = neg_hiddens - neg_hiddens.mean(dim=0)
     
     # Stratified train/test split to maintain class balance    
     n = len(labels)
@@ -378,11 +368,21 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
         random_state=42
     )
     
-    pos_train = pos_hiddens[train_idx]
-    neg_train = neg_hiddens[train_idx]
-    pos_test = pos_hiddens[test_idx]
-    neg_test = neg_hiddens[test_idx]
+    pos_train_raw = pos_hiddens[train_idx]
+    neg_train_raw = neg_hiddens[train_idx]
+    pos_test_raw = pos_hiddens[test_idx]
+    neg_test_raw = neg_hiddens[test_idx]
     labels_test = labels[test_idx]
+
+    pos_mean_train = pos_train_raw.mean(dim=0)
+    neg_mean_train = neg_train_raw.mean(dim=0)
+    pos_train = pos_train_raw - pos_mean_train
+    neg_train = neg_train_raw - neg_mean_train
+    
+    pos_mean_test = pos_test_raw.mean(dim=0)
+    neg_mean_test = neg_test_raw.mean(dim=0)
+    pos_test = pos_test_raw - pos_mean_test
+    neg_test = neg_test_raw - neg_mean_test
     
     n_train = len(train_idx)
     n_test = len(test_idx)
@@ -391,40 +391,23 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
     n_test_pos = (labels_test == 1).sum()
     n_test_neg = (labels_test == 0).sum()
     
-    print(f"\nDataset split (Stratified):")
+    print(f"\nDataset split:")
     print(f"  Train: {n_train} samples ({n_train_pos} pos, {n_train_neg} neg)")
     print(f"  Test:  {n_test} samples ({n_test_pos} pos, {n_test_neg} neg)")
     print(f"  Hidden dim: {pos_hiddens.shape[1]}")
     
-    # Define probe network
     class CCSProbe(nn.Module):
-        def __init__(self, input_dim, hidden_dim):
+        def __init__(self, input_dim):
             super().__init__()
             self.net = nn.Sequential(
-                nn.Linear(input_dim, hidden_dim),
-                nn.ReLU(),
-                nn.Dropout(0.1),
-                nn.Linear(hidden_dim, hidden_dim // 2),
-                nn.ReLU(),
-                nn.Dropout(0.1),
-                nn.Linear(hidden_dim // 2, 1),
+                nn.Linear(input_dim, 1),
                 nn.Sigmoid()
             )
         
         def forward(self, x):
             return self.net(x)
     
-    print(f"\nProbe architecture:")
-    print(f"  Input: {pos_hiddens.shape[1]}")
-    print(f"  Hidden: {config['probe_hidden_dim']} → {config['probe_hidden_dim']//2}")
-    print(f"  Output: 1 (probability)")
-    print(f"\nTraining config:")
-    print(f"  Epochs per trial: {config['ccs_epochs']}")
-    print(f"  Number of trials: {config['ccs_ntries']}")
-    print(f"  Learning rate: {config['ccs_lr']}")
-    print(f"  Weight decay: {config['ccs_weight_decay']}")
-    
-    # CRITICAL FIX #3: Multiple random restarts (avoid local minima)
+    # Multiple random restarts (avoid local minima)
     best_loss = float('inf')
     best_probe = None
     
@@ -434,9 +417,9 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
     
     for trial in range(config['ccs_ntries']):
         # Initialize fresh probe for this trial
-        probe = CCSProbe(pos_hiddens.shape[1], config['probe_hidden_dim'])
+        probe = CCSProbe(pos_hiddens.shape[1])
         
-        # CRITICAL FIX #4: Add weight decay (L2 regularization)
+        # Add weight decay (L2 regularization)
         optimizer = optim.Adam(
             probe.parameters(), 
             lr=config['ccs_lr'],
@@ -450,10 +433,7 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
             p_pos = probe(pos_train)
             p_neg = probe(neg_train)
             
-            # CCS loss: consistency + confidence
-            # Consistency: p(pos) should equal 1 - p(neg)
             consistency_loss = ((p_pos - (1 - p_neg)) ** 2).mean()
-            
             # Confidence: predictions should be confident (far from 0.5)
             confidence_loss = (torch.min(p_pos, p_neg) ** 2).mean()
             
@@ -479,7 +459,6 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
         if final_loss < best_loss:
             best_loss = final_loss
             best_probe = copy.deepcopy(probe)
-            print(f"    ✓ New best probe found!")
     
     print(f"\n{'='*70}")
     print(f"EVALUATION WITH BEST PROBE")
@@ -499,9 +478,7 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
     # Calculate metrics
     raw_accuracy = (preds == labels_test).mean()
     
-    # CRITICAL FIX #2: Handle label ambiguity
-    # CCS doesn't know if it learned "truth=1" or "truth=0"
-    # Determine if we need to flip labels
+    # Handle label ambiguity - determine if we need to flip labels
     if raw_accuracy < 0.5:
         # Probe learned inverted labels
         accuracy = 1 - raw_accuracy
@@ -541,20 +518,7 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
 def main():
     """Main VisionCCS pipeline."""
     chosen_model = CONFIG[f"model_{CONFIG['chosen_model']}"]
-    print(f"\nConfiguration:")
-    print(f"  Model: {chosen_model}")
-    print(f"  Samples per category:")
-    print(f"    - object_detection: {CONFIG['n_samples_object_detection']}")
-    print(f"    - attribute_recognition: {CONFIG['n_samples_attribute_recognition']}")
-    print(f"    - spatial_recognition: {CONFIG['n_samples_spatial_recognition']}")
-    print(f"  Batch size: {CONFIG['batch_size']}")
-    print(f"  Cache enabled: {CONFIG['use_cache']}")
-    print(f"  Categories: {', '.join(CONFIG['categories'])}")
-    print(f"\nCCS Training:")
-    print(f"  Epochs per trial: {CONFIG['ccs_epochs']}")
-    print(f"  Random restarts: {CONFIG['ccs_ntries']}")
-    print(f"  Learning rate: {CONFIG['ccs_lr']}")
-    print(f"  Weight decay: {CONFIG['ccs_weight_decay']}")
+    print(f"Model: {chosen_model}")
     
     all_results = {}
     
