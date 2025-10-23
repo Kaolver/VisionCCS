@@ -420,7 +420,7 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
         probe = CCSProbe(pos_hiddens.shape[1])
         
         # Add weight decay (L2 regularization)
-        optimizer = optim.Adam(
+        optimizer = optim.AdamW(
             probe.parameters(), 
             lr=config['ccs_lr'],
             weight_decay=config['ccs_weight_decay']
