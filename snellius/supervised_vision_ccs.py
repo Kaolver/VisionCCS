@@ -1,5 +1,12 @@
 import torch
-from transformers import LlavaProcessor, LlavaForConditionalGeneration
+from transformers import (
+    LlavaProcessor,
+    LlavaForConditionalGeneration,
+    AutoProcessor,
+    Qwen2VLForConditionalGeneration
+)
+from qwen_vl_utils import process_vision_info
+import os
 from PIL import Image
 import json
 import numpy as np
@@ -27,14 +34,18 @@ CONFIG = {
         '/scratch-nvme/ml-datasets/coco/train/data',
         '/scratch-nvme/ml-datasets/coco/val/data',
     ],
-    'cache_dir': './hidden_states_cache',
+    'cache_dir': './hidden_states_cache', # Supervised cache directory
     'categories': ['object_detection', 'attribute_recognition', 'spatial_recognition'],
     
-    # Model
-    'model_name': 'llava-hf/llava-1.5-7b-hf',
+    'model_llava': 'llava-hf/llava-1.5-7b-hf',
+    'model_qwen2': 'Qwen/Qwen2-VL-7B-Instruct',
+    # Choose model: 'llava' or 'qwen2'
+    'chosen_model': 'qwen2',
     
-    # Supervised training (following CCS.ipynb)
-    'train_split': 0.5,  # 50/50 train/test split (like CCS.ipynb)
+    'hf_token': None,
+    
+    # Supervised training
+    'train_split': 0.5,  # 50/50 train/test split
 }
 
 
@@ -86,31 +97,72 @@ def extract_in_batches(pairs, config, category):
     cache_dir = Path(config['cache_dir'])
     cache_dir.mkdir(exist_ok=True)
     
-    # Check cache
     n = len(pairs)
-    cache_file = cache_dir / f"cache_{category}_{n}_supervised_contrast_llava.npz"
+    model_tag = config['chosen_model']
+    cache_file = cache_dir / f"cache_{category}_{n}_supervised_contrast_{model_tag}.npz"
     
     if config['use_cache'] and cache_file.exists():
         data = np.load(cache_file)
         print(f"  Loaded: pos={data['pos_hiddens'].shape}, neg={data['neg_hiddens'].shape}, labels={data['labels'].shape}")
         return data['pos_hiddens'], data['neg_hiddens'], data['labels']
     
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if not config['use_cache']:
+        print("⚠ Cache disabled (use_cache=False). Extracting new...")
+    else:
+        print("⚠ No cache found. Starting extraction...")
+
+    print(f"\nProcessing {len(pairs)} samples in batches of {config['batch_size']}")
+    print(f"Searching in {len(config['image_dirs'])} image directories")
     
-    processor = LlavaProcessor.from_pretrained(
-        config['model_name'],
-        use_fast=False  # Use slow tokenizer to avoid version conflicts
-    )
-    model = LlavaForConditionalGeneration.from_pretrained(
-        config['model_name'],
-        torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-        device_map="auto" if device == "cuda" else None,
-    )
+    print(f"LOADING MODEL: {config['chosen_model']}")
+    
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Device: {device}")
     
     if device == "cpu":
-        model = model.to(device)
-    
+        print("WARNING: Running on CPU!")
+
+    chosen_model = config['chosen_model']
+
+    if chosen_model == 'llava':
+        processor = LlavaProcessor.from_pretrained(
+            config['model_llava'],
+            use_fast=False
+        )
+        model = LlavaForConditionalGeneration.from_pretrained(
+            config['model_llava'],
+            torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+            device_map="auto" if device == "cuda" else None,
+        )
+        if device == "cpu":
+            model = model.to(device)
+            
+    elif chosen_model == 'qwen2':
+        hf_token = config.get('hf_token') or os.environ.get('HF_TOKEN')
+        model_path = config['model_qwen2']
+        
+        processor = AutoProcessor.from_pretrained(
+            model_path,
+            trust_remote_code=True,
+            token=hf_token,
+        )
+        
+        model = Qwen2VLForConditionalGeneration.from_pretrained(
+            model_path,
+            torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32,
+            device_map="auto" if device == "cuda" else None,
+            trust_remote_code=True,
+            token=hf_token,
+        )
+        
+        if device == "cpu":
+            model = model.to(device)
+        
+    else:
+        raise ValueError(f"Unsupported chosen_model in CONFIG: {chosen_model}")
+
     model.eval()
+    print("✓ Model loaded successfully\n")
 
     # Extract hidden states (positive and negative separately)
     all_pos_hiddens = []
@@ -132,16 +184,25 @@ def extract_in_batches(pairs, config, category):
             try:
                 image = Image.open(image_path).convert('RGB')
                 
-                # Extract positive hidden state (Yes)
-                pos_hidden = extract_one_llava(
-                    model, processor, image, pair['pos_text'], device
-                )
-                
-                # Extract negative hidden state (No)
-                neg_hidden = extract_one_llava(
-                    model, processor, image, pair['neg_text'], device
-                )
-                
+                if config['chosen_model'] == 'llava':
+                    # Extract positive (Yes)
+                    pos_hidden = extract_one_llava(
+                        model, processor, image, pair['pos_text'], device
+                    )
+                    # Extract negative (No)
+                    neg_hidden = extract_one_llava(
+                        model, processor, image, pair['neg_text'], device
+                    )
+                elif config['chosen_model'] == 'qwen2':
+                    # Extract positive (Yes)
+                    pos_hidden = extract_one_qwen2(
+                        model, processor, image, pair['pos_text'], device
+                    )
+                    # Extract negative (No)
+                    neg_hidden = extract_one_qwen2(
+                        model, processor, image, pair['neg_text'], device
+                    )
+
                 all_pos_hiddens.append(pos_hidden)
                 all_neg_hiddens.append(neg_hidden)
                 all_labels.append(pair['label'])
@@ -216,9 +277,60 @@ def extract_one_llava(model, processor, image, text, device):
     return hidden.cpu().float().numpy()
 
 
+def extract_one_qwen2(model, processor, image, text, device):
+    """Extract hidden state from Qwen2-VL for a single image-text pair.
+    
+    Qwen2-VL uses AutoProcessor and a chat message format.
+    """
+    
+    # Qwen2-VL uses chat message format
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "image", "image": image},
+                {"type": "text", "text": text},
+            ],
+        }
+    ]
+    
+    # Apply chat template
+    text_prompt = processor.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
+    
+    # Process vision info
+    image_inputs, video_inputs = process_vision_info(messages)
+    
+    # Prepare inputs
+    inputs = processor(
+        text=[text_prompt],
+        images=image_inputs,
+        videos=video_inputs,
+        padding=True,
+        return_tensors="pt",
+    )
+    
+    # Move to device
+    inputs = {k: v.to(device) if hasattr(v, 'to') else v for k, v in inputs.items()}
+    
+    # Extract hidden states
+    with torch.no_grad():
+        outputs = model(
+            **inputs,
+            output_hidden_states=True,
+            return_dict=True
+        )
+        
+        # Use LAST TOKEN hidden state
+        hidden = outputs.hidden_states[-1][:, -1, :].squeeze(0)
+    
+    return hidden.cpu().float().numpy()
+
+
 def train_supervised_classifier(neg_hs, pos_hs, y, config):
     """
-    Train supervised logistic regression classifier, exactly following CCS.ipynb.
+    Train supervised logistic regression classifier, following CCS.ipynb.
     
     From CCS.ipynb:
     - Split data 50/50 (or custom train_split)
@@ -226,9 +338,9 @@ def train_supervised_classifier(neg_hs, pos_hs, y, config):
     - Train LogisticRegression with class_weight="balanced"
     - Evaluate on test set
     """
-    print(f"TRAINING SUPERVISED LOGISTIC REGRESSION")
+    print(f"\nTRAINING SUPERVISED LOGISTIC REGRESSION")
     
-    # let's create a simple 50/50 train split (the data is already randomized)
+    # 50/50 train split (the data is already randomized)
     n = len(y)
     n_train = int(n * config['train_split'])
     
@@ -237,7 +349,6 @@ def train_supervised_classifier(neg_hs, pos_hs, y, config):
     y_train, y_test = y[:n_train], y[n_train:]
     
     # for simplicity we can just take the difference between positive and negative hidden states
-    # (concatenating also works fine)
     x_train = neg_hs_train - pos_hs_train
     x_test = neg_hs_test - pos_hs_test
     
@@ -254,13 +365,15 @@ def train_supervised_classifier(neg_hs, pos_hs, y, config):
     lr = LogisticRegression(class_weight="balanced")
     lr.fit(x_train, y_train)
     
-    print("Logistic regression accuracy: {}".format(lr.score(x_test, y_test)))
+    print("\nLogistic regression accuracy: {}".format(lr.score(x_test, y_test)))
     
     return lr.score(x_test, y_test), lr
 
 
 def main():
-    print("LLaVA + Contrast Pairs + Logistic Regression")
+    model_key = f"model_{CONFIG['chosen_model']}"
+    chosen_model_name = CONFIG.get(model_key, CONFIG['chosen_model'])
+    print(f"{chosen_model_name} + Contrast Pairs + Logistic Regression")
     
     all_results = {}
     
@@ -293,6 +406,7 @@ def main():
     
     avg_acc = np.mean(list(all_results.values()))
     print(f"\n  {'Average':25s}: {avg_acc:5.1%}")
+    print(f"\n{'='*70}\n")
 
 
 if __name__ == "__main__":
