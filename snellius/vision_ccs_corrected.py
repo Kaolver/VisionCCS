@@ -300,49 +300,6 @@ def extract_one_llava(model, processor, image, text, device):
     return hidden.cpu().float().numpy()
 
 
-def extract_one_qwen(model, tokenizer, image, text, device):
-    """Extract hidden state from Qwen-VL for a single image-text pair.
-    
-    Qwen-VL uses a special format where images are embedded via tokenizer.from_list_format.
-    """
-    
-    # Save image temporarily (Qwen-VL expects image path or PIL)
-    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
-        image.save(tmp.name)
-        image_path = tmp.name
-    
-    try:
-        # Qwen-VL query format: list of dicts with 'image' and 'text' keys
-        query = tokenizer.from_list_format([
-            {'image': image_path},
-            {'text': text},
-        ])
-        
-        # Tokenize the query
-        inputs = tokenizer(query, return_tensors='pt')
-        
-        # Move to device
-        inputs = {k: v.to(device) for k, v in inputs.items()}
-        
-        # Extract hidden states
-        with torch.no_grad():
-            outputs = model(
-                **inputs,
-                output_hidden_states=True,
-                return_dict=True
-            )
-        
-        # Use LAST TOKEN hidden state (aligns with CCS paper)
-        hidden = outputs.hidden_states[-1][:, -1, :].squeeze(0)
-        
-        return hidden.cpu().float().numpy()
-    
-    finally:
-        # Clean up temp file
-        if os.path.exists(image_path):
-            os.unlink(image_path)
-
-
 def extract_one_qwen2(model, processor, image, text, device):
     """Extract hidden state from Qwen2-VL for a single image-text pair.
     
