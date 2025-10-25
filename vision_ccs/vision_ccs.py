@@ -2,9 +2,11 @@ import torch
 from transformers import (
     LlavaProcessor,
     LlavaForConditionalGeneration,
-    AutoModelForCausalLM,
-    AutoTokenizer
+    AutoProcessor,
+    Qwen2VLForConditionalGeneration,
+    Qwen2_5_VLForConditionalGeneration
 )
+from qwen_vl_utils import process_vision_info
 import tempfile
 from PIL import Image
 import os
@@ -29,32 +31,32 @@ CONFIG = {
     'batch_size': 40,
     
     # Cache control
-    'use_cache': False,  # Set to False to force re-extraction of hidden states
+    'use_cache': False,
     
     # Paths
     'vqa_json': './vqav2_mapped.json',
     'image_dirs': [
         '/scratch-nvme/ml-datasets/coco/train/data',
-        '/scratch-nvme/ml-datasets/coco/val/data',  # Fallback for validation images
+        '/scratch-nvme/ml-datasets/coco/val/data',
     ],
-    'cache_dir': './hidden_states_cache_corrected',
+    'cache_dir': './hidden_states_cache_final',
     'categories': ['object_detection', 'attribute_recognition', 'spatial_recognition'],
     
     # Model
     'model_llava': 'llava-hf/llava-1.5-7b-hf',
-    'model_qwen': 'Qwen/Qwen-VL-Chat',
     'model_qwen2': 'Qwen/Qwen2-VL-7B-Instruct',
+    'model_qwen2_5': 'Qwen/Qwen2.5-VL-7B-Instruct',
 
-    # Choose model: 'llava' or 'qwen' or 'qwen2'
-    'chosen_model': 'llava',
+    # Choose model: 'llava', 'qwen2', or 'qwen2_5'
+    'chosen_model': 'qwen2',
     
     'hf_token': None,
     
-    'train_split': 0.7,  # 70% train, 30% test
-    'ccs_epochs': 1000,  # Original uses 1000 epochs
-    'ccs_ntries': 10,  # Multiple random restarts to avoid local minima
+    'train_split': 0.7,
+    'ccs_epochs': 1000,
+    'ccs_ntries': 10,
     'ccs_lr': 1e-3,
-    'ccs_weight_decay': 0.01,  # L2 regularization
+    'ccs_weight_decay': 0.01,
 }
 
 
@@ -75,7 +77,7 @@ def load_vqa_data(config, category):
         q = item['question'].rstrip('?')
         img_id = item['image_id']
         if isinstance(img_id, int):
-            img_id = f"{img_id:012d}.jpg"  # Convert int to zero-padded filename
+            img_id = f"{img_id:012d}.jpg"
 
         pairs.append({
             'image_id': img_id,
@@ -140,7 +142,7 @@ def extract_in_batches(pairs, config, category):
     if chosen_model == 'llava':
         processor = LlavaProcessor.from_pretrained(
             config['model_llava'],
-            use_fast=False  # Use slow tokenizer to avoid version conflicts
+            use_fast=False
         )
         model = LlavaForConditionalGeneration.from_pretrained(
             config['model_llava'],
@@ -149,36 +151,49 @@ def extract_in_batches(pairs, config, category):
         )
         if device == "cpu":
             model = model.to(device)
-    else: # Qwen (qwen or qwen2)
-        # Qwen-VL uses custom processing classes, not standard AutoProcessor
-        # Load tokenizer and model separately with trust_remote_code
+            
+    elif chosen_model == 'qwen2':
         hf_token = config.get('hf_token') or os.environ.get('HF_TOKEN')
+        model_path = config['model_qwen2']
         
-        # Select correct model path based on chosen_model
-        model_path = config[f'model_{chosen_model}']
-        
-        tokenizer = AutoTokenizer.from_pretrained(
+        processor = AutoProcessor.from_pretrained(
             model_path,
             trust_remote_code=True,
-            use_auth_token=hf_token,
+            token=hf_token,
         )
         
-        # Load Qwen-VL model without device_map to avoid 'meta' device issues
-        # The model will auto-convert to bf16 on CUDA
-        model = AutoModelForCausalLM.from_pretrained(
+        model = Qwen2VLForConditionalGeneration.from_pretrained(
             model_path,
+            torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32,
+            device_map="auto" if device == "cuda" else None,
             trust_remote_code=True,
-            use_auth_token=hf_token,
-        ).eval()
+            token=hf_token,
+        )
         
-        # Manually move to device after loading
-        if device == "cuda":
-            model = model.cuda()
-        else:
+        if device == "cpu":
+            model = model.to(device)
+
+    elif chosen_model == 'qwen2_5':
+        hf_token = config.get('hf_token') or os.environ.get('HF_TOKEN')
+        model_path = config['model_qwen2_5']
+        
+        processor = AutoProcessor.from_pretrained(
+            model_path,
+            token=hf_token,
+        )
+        
+        model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            model_path,
+            torch_dtype="auto",
+            device_map="auto" if device == "cuda" else None,
+            token=hf_token,
+        )
+        
+        if device == "cpu":
             model = model.to(device)
         
-        # For Qwen-VL, we use the tokenizer directly (no separate processor)
-        processor = tokenizer
+    else:
+        raise ValueError(f"Unsupported chosen_model in CONFIG: {chosen_model}")
 
     model.eval()
     print("✓ Model loaded successfully\n")
@@ -204,21 +219,26 @@ def extract_in_batches(pairs, config, category):
                 image = Image.open(image_path).convert('RGB')
 
                 if config['chosen_model'] == 'llava':
-                    # Extract positive (Yes)
                     pos_h = extract_one_llava(
                         model, processor, image, pair['pos_text'], device
                     )
-                    # Extract negative (No)
                     neg_h = extract_one_llava(
                         model, processor, image, pair['neg_text'], device
                     )
-                else: # 'qwen'
-                    # Extract positive (Yes)
-                    pos_h = extract_one_qwen(
+                
+                elif config['chosen_model'] == 'qwen2':
+                    pos_h = extract_one_qwen2(
                         model, processor, image, pair['pos_text'], device
                     )
-                    # Extract negative (No)
-                    neg_h = extract_one_qwen(
+                    neg_h = extract_one_qwen2(
+                        model, processor, image, pair['neg_text'], device
+                    )
+                
+                elif config['chosen_model'] == 'qwen2_5':
+                    pos_h = extract_one_qwen2_5(
+                        model, processor, image, pair['pos_text'], device
+                    )
+                    neg_h = extract_one_qwen2_5(
                         model, processor, image, pair['neg_text'], device
                     )
                 
@@ -296,55 +316,97 @@ def extract_one_llava(model, processor, image, text, device):
             return_dict=True
         )
 
-        # Use LAST TOKEN hidden state -- last token pooling / alternative: mean pooling
-        # outputs.hidden_states[-1] has shape [batch_size, seq_len, hidden_dim]
-        # Take the last token position: [:, -1, :]
+        # Use LAST TOKEN hidden state
         hidden = outputs.hidden_states[-1][:, -1, :].squeeze(0)
     
     return hidden.cpu().float().numpy()
 
 
-def extract_one_qwen(model, tokenizer, image, text, device):
-    """Extract hidden state from Qwen-VL for a single image-text pair.
+def extract_one_qwen2(model, processor, image, text, device):
+    """Extract hidden state from Qwen2-VL for a single image-text pair."""
     
-    Qwen-VL uses a special format where images are embedded via tokenizer.from_list_format.
-    """
+    # Qwen2-VL uses chat message format
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "image", "image": image},
+                {"type": "text", "text": text},
+            ],
+        }
+    ]
     
-    # Save image temporarily (Qwen-VL expects image path or PIL)
-    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
-        image.save(tmp.name)
-        image_path = tmp.name
+    # Apply chat template
+    text_prompt = processor.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
     
-    try:
-        # Qwen-VL query format: list of dicts with 'image' and 'text' keys
-        query = tokenizer.from_list_format([
-            {'image': image_path},
-            {'text': text},
-        ])
+    # Process vision info
+    image_inputs, video_inputs = process_vision_info(messages)
+    
+    # Prepare inputs
+    inputs = processor(
+        text=[text_prompt],
+        images=image_inputs,
+        videos=video_inputs,
+        padding=True,
+        return_tensors="pt",
+    )
+    
+    # Move to device
+    inputs = {k: v.to(device) if hasattr(v, 'to') else v for k, v in inputs.items()}
+    
+    # Extract hidden states
+    with torch.no_grad():
+        outputs = model(
+            **inputs,
+            output_hidden_states=True,
+            return_dict=True
+        )
         
-        # Tokenize the query
-        inputs = tokenizer(query, return_tensors='pt')
-        
-        # Move to device
-        inputs = {k: v.to(device) for k, v in inputs.items()}
-        
-        # Extract hidden states
-        with torch.no_grad():
-            outputs = model(
-                **inputs,
-                output_hidden_states=True,
-                return_dict=True
-            )
-        
-        # Use LAST TOKEN hidden state (aligns with CCS paper)
+        # Use LAST TOKEN hidden state
         hidden = outputs.hidden_states[-1][:, -1, :].squeeze(0)
-        
-        return hidden.cpu().float().numpy()
     
-    finally:
-        # Clean up temp file
-        if os.path.exists(image_path):
-            os.unlink(image_path)
+    return hidden.cpu().float().numpy()
+
+
+def extract_one_qwen2_5(model, processor, image, text, device):
+    """Extract hidden state from Qwen2.5-VL for a single image-text pair."""
+    
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "image", "image": image},
+                {"type": "text", "text": text},
+            ],
+        }
+    ]
+    
+    # Prepare inputs using Qwen's format
+    text_prompt = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    image_inputs, video_inputs = process_vision_info(messages)
+    
+    inputs = processor(
+        text=[text_prompt],
+        images=image_inputs,
+        videos=video_inputs,
+        padding=True,
+        return_tensors="pt",
+    )
+
+    # Move to device
+    inputs = {k: v.to(device) if hasattr(v, 'to') else v for k, v in inputs.items()}
+    
+    # Extract hidden states
+    with torch.no_grad():
+        outputs = model(**inputs, output_hidden_states=True)
+    
+    # Use LAST TOKEN hidden state
+    hidden_states = outputs.hidden_states[-1]
+    hidden = hidden_states[0, -1].squeeze(0)
+    
+    return hidden.cpu().float().numpy()
 
 
 def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
@@ -517,8 +579,9 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
 
 def main():
     """Main VisionCCS pipeline."""
-    chosen_model = CONFIG[f"model_{CONFIG['chosen_model']}"]
-    print(f"Model: {chosen_model}")
+    model_key = f"model_{CONFIG['chosen_model']}"
+    chosen_model_name = CONFIG[model_key]
+    print(f"Model: {chosen_model_name}")
     
     all_results = {}
     
