@@ -14,7 +14,8 @@ module load 2023
 module load Python/3.11.3-GCCcore-12.3.0
 module load CUDA/12.1.1 # Load CUDA for PyTorch to use
 
-cd /gpfs/home6/mdemirev/snellius/
+#MODIFY TO CORRECT PATH BEFORE RUNNING
+cd path/to/vision_ccs/
 
 # Check GPU availability
 if command -v nvidia-smi &> /dev/null; then
