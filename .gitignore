@@ -211,3 +211,7 @@ __marimo__/
 ###############################
 /vqa_data/
 /venv_ccs/
+# Cached hidden states (large, regenerable)
+hidden_states_cache*/
+*.npz
+reanalysis_results*.json
