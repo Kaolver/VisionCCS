@@ -121,6 +121,47 @@ def test_find_cache():
               R.find_cache(t, 'spatial_recognition', 'llava') is None)
 
 
+def test_pca_control():
+    rng = np.random.default_rng(0)
+    Z = rng.normal(size=(400, 20)) @ rng.normal(size=(20, 300)) + 0.05 * rng.normal(size=(400, 300))
+    _, W = R._randomized_pca(Z, 20, seed=1)
+    Zc = Z - Z.mean(0, keepdims=True)
+    _, _, Vt = np.linalg.svd(Zc, full_matrices=False)
+    sv = np.linalg.svd(W.T @ Vt[:20].T, compute_uv=False)
+    check('randomized PCA recovers subspace', sv.min() > 0.999, f'min sv={sv.min():.6f}')
+
+    ptr, ntr, pte, nte = (rng.normal(size=(120, 300)).astype('f4') for _ in range(4))
+    a, b, c, d = R.pca_reduce(ptr, ntr, pte, nte, 50)
+    check('pca_reduce shapes', all(x.shape == (120, 50) for x in (a, b, c, d)))
+    check('pca_reduce dtype float32', all(x.dtype == np.float32 for x in (a, b, c, d)))
+    a2, _, _, _ = R.pca_reduce(ptr, ntr, pte + 99.0, nte, 50)
+    check('pca_reduce is fit on train only', np.abs(a - a2).max() == 0.0)
+
+
+def test_gaussian_control():
+    rng = np.random.default_rng(0)
+    xs = tuple(rng.normal(size=(40, 60)).astype('f4') for _ in range(4))
+    g = R.gaussian_control(*xs, seed=3)
+    check('gaussian_control preserves shape/dtype',
+          all(a.shape == b.shape and a.dtype == np.float32 for a, b in zip(g, xs)))
+    check('gaussian_control replaces features', np.abs(g[0] - xs[0]).max() > 0.1)
+
+
+def test_diagnostics():
+    d = R.probe_diagnostics(np.array([0.999, 0.998]), np.array([0.001, 0.002]))
+    check('consistent probe -> ~0 consistency error', d['consistency_err'] < 0.01,
+          f"{d['consistency_err']:.4f}")
+    check('saturation detected on both branches', d['saturated'] == 1.0)
+
+    d = R.probe_diagnostics(np.array([0.9, 0.9]), np.array([0.9, 0.9]))
+    check('inconsistent probe -> large error', abs(d['consistency_err'] - 0.8) < 1e-9)
+    check('confidence term', abs(d['confidence'] - 0.9) < 1e-9)
+    check('mid-range outputs not saturated', d['saturated'] == 0.0)
+
+    d = R.probe_diagnostics(np.array([0.999, 0.999]), np.array([0.5, 0.5]))
+    check('one-sided saturation detected', d['saturated'] == 0.5, f"{d['saturated']}")
+
+
 def test_score_report():
     y = np.array([0, 0, 1, 1])
     r = R.score_report(np.array([0.9, 0.8, 0.2, 0.1]), y)
@@ -130,7 +171,8 @@ def test_score_report():
 
 if __name__ == '__main__':
     for fn in (test_pair_reconstruction, test_alignment, test_auroc, test_splits,
-               test_normalize, test_find_cache, test_score_report):
+               test_normalize, test_find_cache, test_score_report,
+               test_pca_control, test_gaussian_control, test_diagnostics):
         print(f'\n-- {fn.__name__} --')
         fn()
     print('\n' + ('ALL PASS' if _ok else 'FAILURES PRESENT'))
