@@ -62,6 +62,7 @@ def build_pairs(vqa_json, category, mode, seed=42):
 
     return [{'image_id': it['image_id'],
              'question_id': it['question_id'],
+             'question': it['question'],
              'label': 1 if it['answer'] == 'yes' else 0}
             for it in samples]
 
