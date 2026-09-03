@@ -1,38 +1,4 @@
-"""Phase 1 extraction: all layers, explicit token positions, optional image shuffle.
-
-Replaces the three near-duplicate extractors in vision_ccs.py. Three things the
-old path got wrong or never did:
-
-1. LAYER. The old code took hidden_states[-1] -- the final layer, whose entire
-   job is to produce logits for the next token. Zero-shot IS that layer through
-   the LM head, so probing it and comparing against zero-shot largely compares
-   the readout layer with itself (measured agreement: 90.9%). CCS's claim is
-   about INTERNAL representations, which needs mid-layer probing. All layers are
-   captured in the same forward pass, so the sweep is free.
-
-2. TOKEN POSITION. The old code took [:, -1, :]. For Qwen the templated text
-   ends "...Yes<|im_end|>\\n", so that pooled a NEWLINE, two tokens past the
-   answer -- verified, and not what the code comments claimed. We now locate the
-   end-of-turn token explicitly and store both the answer token and the trailing
-   token, making position an ablation axis instead of an assumption.
-
-3. IMAGE SHUFFLE (control). --shuffle-images permutes which image goes with
-   which question, keeping questions and labels intact. VQAv2 has a well-known
-   language prior ("Is this a hospital?" is guessable from text alone); if
-   accuracy survives shuffling, the probe never needed the image.
-
-Output: caches_v3/hs_{model}_{category}{_shuffled}.npz with
-    pos_hiddens, neg_hiddens : (n, n_layers, n_positions, d) float16
-    labels                   : (n,)
-    layers, positions        : which layer indices / position names, in order
-    image_ids, question_ids  : (n,) provenance, so rows align with zero_shot.py
-
-Storage: qwen2 at --layer-stride 2 is ~2 GB per model per condition. Use
---layer-stride 4 if space is tight; the curve just gets coarser.
-
-    python extract.py --model qwen2
-    python extract.py --model qwen2 --shuffle-images
-"""
+"""Multi-layer hidden state extraction with token position tracking."""
 
 import argparse
 import gc
@@ -52,9 +18,7 @@ MODEL_PATHS = {
 
 
 def load_model(model_tag, device):
-    """bf16 for every model -- the old code mixed fp16 (llava) with bf16 (qwen2)
-    and torch_dtype='auto' (qwen2_5), an avoidable confound in a cross-model
-    comparison."""
+    """Load processor and model in bfloat16."""
     import torch
     dtype = torch.bfloat16 if device == 'cuda' else torch.float32
     path = MODEL_PATHS[model_tag]
@@ -81,7 +45,7 @@ def load_model(model_tag, device):
 
 
 def end_of_turn_id(model_tag, tok):
-    """Token that closes the user turn: <|im_end|> for Qwen, EOS for LLaVA."""
+    """Token closing the user turn: <|im_end|> for Qwen, EOS for LLaVA."""
     if model_tag == 'llava':
         return tok.eos_token_id
     tid = tok.convert_tokens_to_ids('<|im_end|>')
@@ -89,8 +53,7 @@ def end_of_turn_id(model_tag, tok):
 
 
 def build_inputs(model_tag, proc, image, text):
-    """Statement + end-of-turn, matching the ata extraction path exactly
-    (add_generation_prompt=False, EOS appended for llava)."""
+    """Build inputs for a statement prompt."""
     if model_tag == 'llava':
         eos = proc.tokenizer.eos_token or ''
         return proc(images=image, text=f'USER: <image>\n{text}{eos}',
@@ -106,13 +69,7 @@ def build_inputs(model_tag, proc, image, text):
 
 
 def locate_positions(input_ids, eot_id):
-    """Map position names to indices in the sequence.
-
-    'answer' is the token immediately before the LAST end-of-turn token, i.e.
-    the Yes/No the statement ends with. 'eot' is that end-of-turn token.
-    'final' is the last token overall -- what the old code used, kept so the
-    old behaviour stays reproducible.
-    """
+    """Map position names to token indices in sequence."""
     ids = input_ids.tolist()
     last = len(ids) - 1
     eot = last
@@ -133,7 +90,7 @@ def find_image(image_id, image_dirs):
 
 
 def extract_one(model, proc, model_tag, image, text, layers, pos_names, eot_id):
-    """One forward pass -> (n_layers, n_positions, d) float16."""
+    """Run one forward pass and extract hidden states across selected layers and positions."""
     import torch
     inputs, _ = build_inputs(model_tag, proc, image, text)
     device = next(model.parameters()).device
@@ -144,14 +101,12 @@ def extract_one(model, proc, model_tag, image, text, layers, pos_names, eot_id):
 
     idx = locate_positions(inputs['input_ids'][0], eot_id)
     take = [idx[p] for p in pos_names]
-    # hidden_states is a tuple of (n_layers+1) tensors, each (1, seq, d)
     stack = torch.stack([out.hidden_states[l][0, take, :] for l in layers], dim=0)
     return stack.float().cpu().numpy().astype(np.float16), idx
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--model', default='qwen2', choices=list(MODEL_PATHS))
     ap.add_argument('--categories', nargs='+', default=CATEGORIES)
     ap.add_argument('--vqa-json', default='./vqav2_mapped.json')
@@ -184,7 +139,7 @@ def main():
         model.config.num_hidden_layers + 1
     layers = list(range(0, n_layers_total, args.layer_stride))
     if layers[-1] != n_layers_total - 1:
-        layers.append(n_layers_total - 1)     # always keep the final layer
+        layers.append(n_layers_total - 1)
     print(f'capturing {len(layers)} of {n_layers_total} layers: {layers}')
     print(f'positions: {args.positions}')
 
@@ -200,7 +155,6 @@ def main():
             rng = np.random.default_rng(args.shuffle_seed)
             imgs = [p['image_id'] for p in pairs]
             perm = rng.permutation(len(imgs))
-            # derangement-ish: retry any fixed points once
             for i, j in enumerate(perm):
                 if imgs[j] == imgs[i]:
                     perm[i] = perm[(i + 1) % len(perm)]
@@ -221,13 +175,10 @@ def main():
                                     layers, args.positions, eot_id)
                 if pos_log is None:
                     pos_log = idx
-                    ids = proc(text=[f'{q}? Yes'], return_tensors='pt') \
-                        if args.model == 'llava' else None
                     print(f'  first item position map: {idx}')
                 P.append(ph); N.append(nh); y.append(p['label'])
                 iid.append(p['image_id']); qid.append(p['question_id'])
             except Exception as e:
-                # logged and counted, not silently swallowed as before
                 failures.append((p['question_id'], f'{type(e).__name__}: {e}'))
             if device == 'cuda' and i % 100 == 0:
                 torch.cuda.empty_cache()
