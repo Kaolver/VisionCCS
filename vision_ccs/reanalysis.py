@@ -245,19 +245,54 @@ def probe_diagnostics(p_pos, p_neg):
 
 
 def train_ccs(pos_tr, neg_tr, pos_te, neg_te, cfg, seed, y_tr=None, y_te=None):
-    """Train unsupervised CCS probe."""
+    """Train unsupervised CCS probe over cfg['ntries'] restarts.
+
+    Restart selection. Burns picks the restart with the lowest final TRAINING
+    loss. Measured over 300 restarts that rule scores 78.9% -- 2.5pp worse than
+    picking a restart at random (81.4%) and 4.7pp below the oracle -- because
+    the degenerate solutions are precisely the ones that drive the loss to ~0
+    (the worst probe observed sat at loss 4.69e-06 with 52.0% accuracy).
+
+    Why a held-out slice fixes it. The loss IS train consistency + confidence,
+    so by construction it cannot see whether consistency generalises. The
+    degenerate probe reaches ~1e-6 on the data it was fit to and a mediocre
+    0.108 consistency error off it. So we carve cfg['val_frac'] out of train,
+    fit on the remainder, and record consistency on the held-out slice. That
+    slice is never trained on and carries no labels, keeping selection fully
+    unsupervised AND fully inductive -- unlike measuring consistency on the
+    test inputs, which works equally well but is transductive.
+
+    Every criterion is recorded per restart; the caller chooses. y_tr / y_te
+    are used for EVALUATION ONLY and never touch training or selection.
+    """
     import torch
     import torch.nn as nn
     import torch.optim as optim
     import copy
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    Xp = torch.tensor(pos_tr, dtype=torch.float32, device=device)
-    Xn = torch.tensor(neg_tr, dtype=torch.float32, device=device)
+
+    # hold out a slice of TRAIN for label-free selection
+    n_tr = len(pos_tr)
+    val_frac = cfg.get('val_frac', 0.2)
+    rng = np.random.default_rng(seed)
+    perm_np = rng.permutation(n_tr)
+    n_val = int(round(n_tr * val_frac))
+    val_i, fit_i = perm_np[:n_val], perm_np[n_val:]
+    # fall back to fitting on everything if either side would be unusable
+    # (n_fit == 0 would otherwise crash; a 1-row val slice is meaningless)
+    if len(val_i) < 2 or len(fit_i) < 2:
+        val_i, fit_i = np.array([], dtype=int), np.arange(n_tr)
+
+    Xp = torch.tensor(pos_tr[fit_i], dtype=torch.float32, device=device)
+    Xn = torch.tensor(neg_tr[fit_i], dtype=torch.float32, device=device)
+    Vp = torch.tensor(pos_tr[val_i], dtype=torch.float32, device=device)
+    Vn = torch.tensor(neg_tr[val_i], dtype=torch.float32, device=device)
     Tp = torch.tensor(pos_te, dtype=torch.float32, device=device)
     Tn = torch.tensor(neg_te, dtype=torch.float32, device=device)
+    y_fit = None if y_tr is None else np.asarray(y_tr)[fit_i]
 
-    best_loss, best_probe, restarts = float('inf'), None, []
+    best_loss, best_probe, restarts, probes = float('inf'), None, [], []
     for t in range(cfg['ntries']):
         torch.manual_seed(seed * 1000 + t)
         probe, opt = _probe_and_opt(torch, nn, optim, Xp.shape[1],
@@ -279,29 +314,45 @@ def train_ccs(pos_tr, neg_tr, pos_te, neg_te, cfg, seed, y_tr=None, y_te=None):
             s_te = (0.5 * (te_pos + (1 - te_neg))).cpu().numpy()
             rec = {'restart': t, 'loss': fl,
                    **probe_diagnostics(te_pos.cpu().numpy(), te_neg.cpu().numpy())}
+            if len(val_i):
+                v_pos, v_neg = probe(Vp).squeeze(-1), probe(Vn).squeeze(-1)
+                for k, v in probe_diagnostics(v_pos.cpu().numpy(),
+                                              v_neg.cpu().numpy()).items():
+                    rec['val_' + k] = v
             if y_te is not None:
                 r = score_report(s_te, y_te)
                 rec['test_acc_raw'] = r['raw_acc']
                 rec['test_acc_flipped'] = r['flipped_acc']
                 rec['test_auroc_flipped'] = r['flipped_auroc']
-            if y_tr is not None:
-                rec['train_acc_flipped'] = score_report(s_tr, y_tr)['flipped_acc']
+            if y_fit is not None:
+                rec['train_acc_flipped'] = score_report(s_tr, y_fit)['flipped_acc']
             restarts.append(rec)
+            probes.append(copy.deepcopy(probe))
 
         if fl < best_loss:
             best_loss, best_probe = fl, copy.deepcopy(probe)
+
+    # headline probe follows cfg['selection']; 'loss' reproduces Burns exactly
+    rule = cfg.get('selection', 'loss')
+    if rule != 'loss':
+        key = {'val_consistency': 'val_consistency_err',
+               'test_consistency': 'consistency_err'}.get(rule)
+        if key and key in restarts[0]:
+            best_probe = probes[int(np.argmin([r[key] for r in restarts]))]
 
     with torch.no_grad():
         bp, bn = best_probe(Tp).squeeze(-1), best_probe(Tn).squeeze(-1)
         scores = (0.5 * (bp + (1 - bn))).cpu().numpy()
         diag = probe_diagnostics(bp.cpu().numpy(), bn.cpu().numpy())
         train_acc = None
-        if y_tr is not None:
+        if y_fit is not None:
             s_tr = (0.5 * (best_probe(Xp).squeeze(-1)
                            + (1 - best_probe(Xn).squeeze(-1)))).cpu().numpy()
-            train_acc = score_report(s_tr, y_tr)['flipped_acc']
+            train_acc = score_report(s_tr, y_fit)['flipped_acc']
 
     return scores, {'best_loss': best_loss, 'restarts': restarts,
+                    'selection': rule, 'n_fit': int(len(fit_i)),
+                    'n_val': int(len(val_i)),
                     'train_acc_flipped': train_acc, **diag}
 
 
@@ -423,6 +474,15 @@ def main():
     ap.add_argument('--controls', action='store_true',
                     help='Run Gaussian noise and PCA controls')
     ap.add_argument('--pca-k', type=int, default=50)
+    ap.add_argument('--selection', default='loss',
+                    choices=['loss', 'val_consistency', 'test_consistency'],
+                    help="restart-selection rule for the headline CCS number. "
+                         "'loss' reproduces Burns; 'val_consistency' selects on "
+                         "a held-out slice of train (label-free AND inductive); "
+                         "'test_consistency' is label-free but transductive. "
+                         "All are recorded per restart regardless.")
+    ap.add_argument('--val-frac', type=float, default=0.2,
+                    help='fraction of train held out for label-free selection')
     ap.add_argument('--norm', default='per_split', choices=['per_split', 'train_stats'])
     ap.add_argument('--train-frac', type=float, default=0.6)
     ap.add_argument('--epochs', type=int, default=1000)
@@ -439,7 +499,8 @@ def main():
 
     cfg = {'train_frac': args.train_frac, 'epochs': args.epochs, 'ntries': args.ntries,
            'lr': args.lr, 'weight_decay': args.weight_decay,
-           'var_normalize': not args.no_var_normalize}
+           'var_normalize': not args.no_var_normalize,
+           'selection': args.selection, 'val_frac': args.val_frac}
 
     results = {'config': {**cfg, 'norm': args.norm, 'splits': args.splits,
                           'controls': args.controls, 'pca_k': args.pca_k,

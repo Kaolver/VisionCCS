@@ -8,6 +8,11 @@ import numpy as np
 
 CRITERIA = {
     'loss (Burns)':      ('loss', +1),
+    # held-out slice of TRAIN: label-free AND inductive (never sees test)
+    'val_consistency':   ('val_consistency_err', +1),
+    'val_confidence':    ('val_confidence', +1),
+    'val_saturated_hi':  ('val_saturated', -1),
+    # measured on test inputs: label-free but transductive
     'consistency_err':   ('consistency_err', +1),
     'confidence':        ('confidence', +1),
     'saturated_low':     ('saturated', +1),
