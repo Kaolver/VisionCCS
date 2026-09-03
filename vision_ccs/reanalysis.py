@@ -66,8 +66,23 @@ def build_pairs(vqa_json, category, mode, seed=42):
             for it in samples]
 
 
-def align_pairs(pairs, labels):
-    """Attach image_ids to cached rows based on label sequence alignment."""
+def _image_exists(image_id, image_dirs):
+    """Replay find_image() from vision_ccs.py: is this image on disk?"""
+    name = f'{image_id:012d}.jpg' if isinstance(image_id, int) else image_id
+    return any((Path(d) / name).exists() for d in image_dirs)
+
+
+def align_pairs(pairs, labels, image_dirs=None):
+    """Attach image_ids to cached rows, verified against the label sequence.
+
+    Extraction appends in pair order but SKIPS pairs whose image was missing on
+    disk. Those skips are scattered through the shuffled order, not clustered at
+    the tail, so a prefix match usually fails once anything was dropped.
+
+    When image_dirs is given we replay the same existence check the extractor
+    ran, which reproduces the skip set exactly and recovers the alignment. The
+    label sequence still has to match afterwards -- we never guess.
+    """
     pair_labels = np.array([p['label'] for p in pairs], dtype=int)
 
     if len(pair_labels) == len(labels) and np.array_equal(pair_labels, labels):
@@ -76,7 +91,18 @@ def align_pairs(pairs, labels):
     if len(labels) < len(pair_labels) and np.array_equal(pair_labels[:len(labels)], labels):
         return np.array([p['image_id'] for p in pairs[:len(labels)]]), 'prefix'
 
-    return None, f'MISMATCH (pairs={len(pair_labels)}, cached={len(labels)})'
+    if image_dirs:
+        kept = [p for p in pairs if _image_exists(p['image_id'], image_dirs)]
+        kept_labels = np.array([p['label'] for p in kept], dtype=int)
+        if len(kept_labels) == len(labels) and np.array_equal(kept_labels, labels):
+            n_skip = len(pair_labels) - len(kept_labels)
+            return (np.array([p['image_id'] for p in kept]),
+                    f'recovered ({n_skip} rows dropped for missing images)')
+        return None, (f'MISMATCH after replay (pairs={len(pair_labels)}, '
+                      f'on-disk={len(kept_labels)}, cached={len(labels)})')
+
+    return None, (f'MISMATCH (pairs={len(pair_labels)}, cached={len(labels)}) '
+                  f'-- pass --image-dirs to recover')
 
 
 def make_split(n, seed, train_frac, groups=None):
@@ -399,6 +425,10 @@ def main():
     ap.add_argument('--lr', type=float, default=1e-2)
     ap.add_argument('--weight-decay', type=float, default=0.01)
     ap.add_argument('--no-var-normalize', action='store_true')
+    ap.add_argument('--image-dirs', nargs='+', default=[
+        '/scratch-nvme/ml-datasets/coco/train/data',
+        '/scratch-nvme/ml-datasets/coco/val/data'],
+        help='replayed to recover which pairs the extractor skipped, which is what enables the grouped split (A5)')
     ap.add_argument('--out', default='./reanalysis_results.json')
     args = ap.parse_args()
 
@@ -421,7 +451,7 @@ def main():
 
             pairs = build_pairs(args.vqa_json, category,
                                 mode='ccs' if kind == 'ccs' else 'supervised')
-            image_ids, status = align_pairs(pairs, labels)
+            image_ids, status = align_pairs(pairs, labels, args.image_dirs)
 
             print(f'\n=== {model_tag} / {category} ===')
             print(f'  cache {path.name}')
