@@ -34,9 +34,40 @@ def select(restarts, key, direction):
     return int(np.argmin(vals))
 
 
+def _rule_picks(runs, key, direction):
+    return np.array([rs[select(rs, key, direction)]['test_acc_flipped']
+                     for _, _, rs in runs])
+
+
+def print_by_cell(runs):
+    """Per (cell, split) breakdown of loss-selection vs consistency-selection
+    vs oracle. This is the shape the results table needs: the aggregate hides
+    that the gain is concentrated in the cells where a restart went degenerate.
+    """
+    from collections import OrderedDict
+    groups = OrderedDict()
+    for cell, run, rs in runs:
+        groups.setdefault((cell, run.split('/')[0]), []).append((cell, run, rs))
+
+    print('\nPer-cell breakdown (mean +/- std over seeds):')
+    hdr = (f"  {'cell':30s} {'split':10s} {'loss(Burns)':>14s} "
+           f"{'consistency':>14s} {'oracle':>8s} {'gain':>7s}")
+    print(hdr)
+    print('  ' + '-' * (len(hdr) - 2))
+    for (cell, split), rr in groups.items():
+        burns = _rule_picks(rr, 'loss', +1)
+        cons = _rule_picks(rr, 'consistency_err', +1)
+        orac = np.array([max(r['test_acc_flipped'] for r in rs) for _, _, rs in rr])
+        print(f"  {cell:30s} {split:10s} {burns.mean():6.1%}+/-{burns.std():5.1%} "
+              f"{cons.mean():6.1%}+/-{cons.std():5.1%} {orac.mean():7.1%} "
+              f"{cons.mean() - burns.mean():+6.1%}")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('results_json')
+    ap.add_argument('--by-cell', action='store_true',
+                    help='break the table down per model/category/split')
     ap.add_argument('--combine', action='store_true',
                     help='also try loss+consistency_err after per-run z-scoring')
     args = ap.parse_args()
@@ -102,6 +133,9 @@ def main():
           f"{0.0:7.1%} {oracle.mean()-baseline.mean():+8.1%}")
     print(f"  {'worst restart':24s} {worst.mean():6.1%} {worst.std():6.1%} "
           f"{(oracle - worst).mean():7.1%} {worst.mean()-baseline.mean():+8.1%}")
+
+    if args.by_cell:
+        print_by_cell(runs)
 
     print('\nWorst single run (largest gap between best and selected restart):')
     gaps = [(max(r['test_acc_flipped'] for r in rs)
