@@ -78,11 +78,29 @@ def build_inputs(model_tag, proc, image, question):
     return proc(text=[text], images=imgs, videos=vids, padding=True, return_tensors='pt')
 
 
+def calibrate(margin):
+    """Burns' calibrated zero-shot, rank-based: the top half of items by margin
+    are predicted yes, so the prediction rate is exactly 50/50 regardless of the
+    model's yes-bias.
+
+    Rank-based rather than `margin > median` because these logits are bf16, so
+    margins are quantised and ties are common. With enough mass sitting exactly
+    at the median a `>` threshold collapses to predicting one class for
+    everything. Ranking breaks ties deterministically and cannot degenerate.
+    """
+    margin = np.asarray(margin, dtype=float)
+    n = len(margin)
+    order = np.argsort(margin, kind='mergesort')
+    preds = np.zeros(n, dtype=int)
+    preds[order[n - n // 2:]] = 1          # top half -> yes
+    return preds
+
+
 def calibrated_accuracy(margin, labels):
-    """Compute calibrated zero-shot accuracy by median thresholding."""
-    thr = float(np.median(margin))
-    preds = (margin > thr).astype(int)
-    return float((preds == labels).mean()), thr
+    """Calibrated zero-shot accuracy. Also returns the median margin, which is
+    reported only as a descriptive statistic."""
+    preds = calibrate(margin)
+    return float((preds == np.asarray(labels)).mean()), float(np.median(margin))
 
 
 def main():

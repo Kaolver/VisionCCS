@@ -434,7 +434,7 @@ def run_cell(pos, neg, labels, image_ids, cfg, seed, grouped, norm_scheme,
 
     def methods(p_tr, n_tr, p_te, n_te, tag_into):
         s, meta = train_ccs(p_tr, n_tr, p_te, n_te, cfg, seed, y_tr=y_tr, y_te=y_te)
-        tag_into['ccs'] = {**score_report(s, y_te), **meta}
+        tag_into['ccs'] = {**score_report(s, y_te), **meta, '_scores': [float(v) for v in s]}
         s, meta = train_supervised_probe(p_tr, n_tr, p_te, n_te, y_tr, cfg, seed)
         tag_into['sup_probe'] = {**score_report(s, y_te), **meta}
         try:
@@ -445,6 +445,26 @@ def run_cell(pos, neg, labels, image_ids, cfg, seed, grouped, norm_scheme,
 
     raw = normalize(pos[tr], neg[tr], pos[te], neg[te], norm_scheme, cfg['var_normalize'])
     methods(*raw, out)
+
+    # Per-item test predictions, so CCS can be compared against the model's own
+    # zero-shot answer ITEM BY ITEM, not just in aggregate. Two methods can hit
+    # the same accuracy while disagreeing on which items they get right; if CCS
+    # agrees with zero-shot almost everywhere, it found the model's "what will I
+    # answer" direction rather than a truth direction. test_idx indexes rows of
+    # the cache, which build_pairs() ordering also indexes, so these line up with
+    # zero_shot.py's output row-for-row.
+    out['test_idx'] = [int(i) for i in te]
+    if '_scores' in out['ccs']:
+        preds = (np.asarray(out['ccs'].pop('_scores')) > 0.5).astype(int)
+        # CCS polarity is arbitrary (the loss is invariant under p -> 1-p on both
+        # branches), so store the ORIENTED prediction -- the same flip
+        # score_report applies. Comparing un-oriented predictions against
+        # zero-shot would measure the coin flip, not the agreement.
+        if out['ccs']['raw_acc'] < 0.5:
+            preds = 1 - preds
+        out['ccs_test_pred'] = [int(v) for v in preds]
+    for m in ('ccs', 'sup_probe', 'logreg'):
+        out.get(m, {}).pop('_scores', None)
 
     if controls:
         out['controls'] = {}
