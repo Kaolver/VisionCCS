@@ -1,15 +1,14 @@
 #!/bin/bash
-#SBATCH --job-name=ccs-extract-v3
+#SBATCH --job-name=ccs-smoke-test
 #SBATCH --output=%x_%j.out
 #SBATCH --ntasks-per-node=1
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=1
-#SBATCH --time=06:00:00
+#SBATCH --time=00:15:00
 #SBATCH --partition=gpu_a100
-#SBATCH --mem=64G
+#SBATCH --mem=32G
 
-# Phase 1: all-layer extraction at corrected token positions, plus the
-# shuffled-image control, for qwen2 and llava.
+# Fast smoke test for Phase 1 extraction on a GPU node
 
 if [ -n "$SLURM_SUBMIT_DIR" ] && [ -f "$SLURM_SUBMIT_DIR/extract.py" ]; then
   cd "$SLURM_SUBMIT_DIR" || exit 1
@@ -38,15 +37,4 @@ fi
 
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 
-for MODEL in qwen2 llava; do
-  echo "=== $MODEL : real images ==="
-  python extract.py --model "$MODEL" --layer-stride 2 --out-dir ./caches_v3
-
-  echo "=== $MODEL : shuffled-image control ==="
-  python extract.py --model "$MODEL" --layer-stride 2 --out-dir ./caches_v3 \
-      --shuffle-images
-done
-
-echo "=== cache sizes ==="
-du -sh ./caches_v3
-ls -lh ./caches_v3
+python extract.py --model qwen2 --limit 5 --categories object_detection --out-dir /tmp/smoke

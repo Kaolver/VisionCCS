@@ -169,11 +169,34 @@ def test_score_report():
     check('score_report class accs', r['acc_pos'] == 1.0 and r['acc_neg'] == 1.0)
 
 
+def test_locate_positions():
+    from extract import locate_positions
+    # Qwen2 case: [... text, Yes, <|im_end|>, \n]
+    ids_qwen = np.array([10, 20, 30, 9999, 151645, 198])
+    m_qwen = locate_positions(ids_qwen, 151645)
+    check('locate_positions Qwen: answer < final',
+          m_qwen == {'answer': 3, 'eot': 4, 'final': 5} and m_qwen['answer'] < m_qwen['final'])
+
+    # LLaVA case: [... text, Yes, </s>]
+    ids_llava = np.array([10, 20, 30, 9999, 2])
+    m_llava = locate_positions(ids_llava, 2)
+    check('locate_positions LLaVA: eot == final & answer < final',
+          m_llava == {'answer': 3, 'eot': 4, 'final': 4} and m_llava['answer'] < m_llava['final'])
+
+    # Missing eot token fallback
+    ids_missing = np.array([10, 20, 30, 9999])
+    m_missing = locate_positions(ids_missing, 999)
+    check('locate_positions missing eot fallback',
+          m_missing == {'answer': 2, 'eot': 3, 'final': 3})
+
+
 if __name__ == '__main__':
     for fn in (test_pair_reconstruction, test_alignment, test_auroc, test_splits,
                test_normalize, test_find_cache, test_score_report,
-               test_pca_control, test_gaussian_control, test_diagnostics):
+               test_pca_control, test_gaussian_control, test_diagnostics,
+               test_locate_positions):
         print(f'\n-- {fn.__name__} --')
         fn()
     print('\n' + ('ALL PASS' if _ok else 'FAILURES PRESENT'))
     sys.exit(0 if _ok else 1)
+
