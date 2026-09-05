@@ -62,17 +62,22 @@ def load_model(model_tag, cfg_paths, device):
     return model, proc
 
 
-def build_inputs(model_tag, proc, image, question):
+def build_inputs(model_tag, proc, image, question, instruction=True):
     """Build input prompt stopping before the answer with generation prompt on."""
     q = question.rstrip('?') + '?'
+    # CCS extraction sees a bare statement ("Is there a dog? Yes"). Giving
+    # zero-shot an extra "Answer yes or no." task hint that CCS never gets is an
+    # asymmetry favouring zero-shot, so it is switchable and both are reported.
+    if instruction:
+        q = f'{q} Answer yes or no.'
     if model_tag == 'llava':
-        prompt = f'USER: <image>\n{q} Answer yes or no.\nASSISTANT:'
+        prompt = f'USER: <image>\n{q}\nASSISTANT:'
         return proc(images=image, text=prompt, return_tensors='pt')
 
     from qwen_vl_utils import process_vision_info
     messages = [{'role': 'user', 'content': [
         {'type': 'image', 'image': image},
-        {'type': 'text', 'text': f'{q} Answer yes or no.'}]}]
+        {'type': 'text', 'text': q}]}]
     text = proc.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     imgs, vids = process_vision_info(messages)
     return proc(text=[text], images=imgs, videos=vids, padding=True, return_tensors='pt')
@@ -112,6 +117,11 @@ def main():
         '/scratch-nvme/ml-datasets/coco/train/data',
         '/scratch-nvme/ml-datasets/coco/val/data'])
     ap.add_argument('--out-dir', default='./zeroshot')
+    ap.add_argument('--no-instruction', action='store_true',
+                    help='drop "Answer yes or no." so the prompt matches what CCS '
+                         'extraction sees (removes a hint zero-shot got and CCS did not)')
+    ap.add_argument('--tag', default='',
+                    help='suffix for output filenames, to keep variants separate')
     ap.add_argument('--limit', type=int, default=None,
                     help='cap items per category (for a quick smoke test)')
     args = ap.parse_args()
@@ -150,7 +160,8 @@ def main():
                 continue
             try:
                 image = Image.open(path).convert('RGB')
-                inputs = build_inputs(args.model, proc, image, p['question'])
+                inputs = build_inputs(args.model, proc, image, p['question'],
+                                      instruction=not args.no_instruction)
                 inputs = {k: (v.to(device) if hasattr(v, 'to') else v)
                           for k, v in inputs.items()}
                 with torch.no_grad():
@@ -176,7 +187,7 @@ def main():
         cal, thr = calibrated_accuracy(margin, labels)
         yes_rate = float((margin > 0).mean())
 
-        f = out_dir / f'zeroshot_{args.model}_{category}.npz'
+        f = out_dir / f'zeroshot_{args.model}{args.tag}_{category}.npz'
         np.savez(f, yes_logit=yl, no_logit=nl, labels=labels)
         summary[category] = {'n': int(len(labels)), 'skipped': int(skipped),
                              'raw_acc': raw, 'calibrated_acc': cal,
@@ -186,7 +197,7 @@ def main():
         print(f'  raw acc        {raw:.1%}   (predicts yes {yes_rate:.1%} of the time)')
         print(f'  calibrated acc {cal:.1%}   (median margin {thr:+.3f})\n')
 
-    (out_dir / f'zeroshot_{args.model}_summary.json').write_text(json.dumps(summary, indent=2))
+    (out_dir / f'zeroshot_{args.model}{args.tag}_summary.json').write_text(json.dumps(summary, indent=2))
     print('\n' + '=' * 70)
     print(f"{'category':26s} {'n':>6s} {'raw':>8s} {'calibrated':>11s}")
     for c, s in summary.items():

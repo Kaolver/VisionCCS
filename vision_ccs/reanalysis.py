@@ -228,6 +228,32 @@ def _probe_and_opt(torch, nn, optim, d, lr, wd, device):
     return probe, optim.AdamW(probe.parameters(), lr=lr, weight_decay=wd)
 
 
+def _project_unit_norm(torch, probe):
+    """Project the probe's weight vector back onto the unit sphere.
+
+    Why. With p = sigmoid(w.x + b), BOTH CCS loss terms improve monotonically as
+    ||w|| grows along ANY direction that separates the two clouds: consistency
+    |p+ - (1-p-)| shrinks and confidence min(p+,p-) shrinks. So the loss can be
+    driven toward zero by inflating the magnitude rather than by finding a better
+    direction, and weight decay at 0.01 barely resists it. That is the mechanism
+    behind the 1e-6 losses, the 86-94% saturation, and the degenerate restarts.
+
+    Fixing ||w|| = 1 removes that degree of freedom, so the loss can only differ
+    between restarts because the DIRECTIONS differ.
+
+    What to expect. This is not predicted to raise accuracy. With var-normalised
+    features w.x has variance ||w||^2 = 1, so logits are O(1), the probe cannot
+    saturate, and the absolute loss floor RISES -- that is the constraint working,
+    not failing. The testable prediction is that corr(loss, accuracy) becomes
+    strongly negative, i.e. the loss turns back into a usable selection criterion.
+    Applied to the supervised probe too; constraining only CCS would put back an
+    asymmetry of exactly the kind this whole re-analysis removed.
+    """
+    with torch.no_grad():
+        w = probe[0].weight
+        w.div_(w.norm(p=2, dim=1, keepdim=True).clamp_min(1e-12))
+
+
 def probe_diagnostics(p_pos, p_neg):
     """Compute consistency, confidence, and saturation diagnostics."""
     p_pos = np.asarray(p_pos, dtype=float).ravel()
@@ -306,6 +332,8 @@ def train_ccs(pos_tr, neg_tr, pos_te, neg_te, cfg, seed, y_tr=None, y_te=None):
             opt.zero_grad()
             loss.backward()
             opt.step()
+            if cfg.get('weight_norm') == 'unit':
+                _project_unit_norm(torch, probe)
         fl = float(loss.detach().cpu())
 
         with torch.no_grad():
@@ -381,6 +409,8 @@ def train_supervised_probe(pos_tr, neg_tr, pos_te, neg_te, y_tr, cfg, seed):
             opt.zero_grad()
             loss.backward()
             opt.step()
+            if cfg.get('weight_norm') == 'unit':
+                _project_unit_norm(torch, probe)
         fl = float(loss.detach().cpu())
         if fl < best_loss:
             best_loss, best_probe = fl, copy.deepcopy(probe)
@@ -437,11 +467,17 @@ def run_cell(pos, neg, labels, image_ids, cfg, seed, grouped, norm_scheme,
         tag_into['ccs'] = {**score_report(s, y_te), **meta, '_scores': [float(v) for v in s]}
         s, meta = train_supervised_probe(p_tr, n_tr, p_te, n_te, y_tr, cfg, seed)
         tag_into['sup_probe'] = {**score_report(s, y_te), **meta}
-        try:
-            s, meta = train_logreg(p_tr, n_tr, p_te, n_te, y_tr, seed)
-            tag_into['logreg'] = {**score_report(s, y_te), **meta}
-        except ImportError:
-            tag_into['logreg'] = {'error': 'sklearn unavailable'}
+        if cfg.get('skip_logreg'):
+            # logreg is sklearn and cannot take the unit-norm constraint, so it
+            # is invariant along the --weight-norm axis; recomputing it for every
+            # ablation cell is the run's dominant cost for no information.
+            tag_into['logreg'] = {'error': 'skipped'}
+        else:
+            try:
+                s, meta = train_logreg(p_tr, n_tr, p_te, n_te, y_tr, seed)
+                tag_into['logreg'] = {**score_report(s, y_te), **meta}
+            except ImportError:
+                tag_into['logreg'] = {'error': 'sklearn unavailable'}
 
     raw = normalize(pos[tr], neg[tr], pos[te], neg[te], norm_scheme, cfg['var_normalize'])
     methods(*raw, out)
@@ -502,6 +538,13 @@ def main():
                          "a held-out slice of train (label-free AND inductive); "
                          "'test_consistency' is label-free but transductive. "
                          "All are recorded per restart regardless.")
+    ap.add_argument('--weight-norm', default='none', choices=['none', 'unit'],
+                    help="'unit' constrains ||w||=1 after every step, removing the "
+                         "scale degeneracy that lets the CCS loss reach ~0 along any "
+                         "separating direction. Applied to the supervised probe too.")
+    ap.add_argument('--skip-logreg', action='store_true',
+                    help='skip the logistic-regression baseline (invariant along '
+                         'the --weight-norm axis, and the slowest part of a run)')
     ap.add_argument('--val-frac', type=float, default=0.2,
                     help='fraction of train held out for label-free selection')
     ap.add_argument('--norm', default='per_split', choices=['per_split', 'train_stats'])
@@ -521,7 +564,9 @@ def main():
     cfg = {'train_frac': args.train_frac, 'epochs': args.epochs, 'ntries': args.ntries,
            'lr': args.lr, 'weight_decay': args.weight_decay,
            'var_normalize': not args.no_var_normalize,
-           'selection': args.selection, 'val_frac': args.val_frac}
+           'selection': args.selection, 'val_frac': args.val_frac,
+           'weight_norm': args.weight_norm,
+           'skip_logreg': args.skip_logreg}
 
     results = {'config': {**cfg, 'norm': args.norm, 'splits': args.splits,
                           'controls': args.controls, 'pca_k': args.pca_k,
