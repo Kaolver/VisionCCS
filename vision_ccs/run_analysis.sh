@@ -11,8 +11,12 @@
 # Re-runnable end-to-end analysis on the existing caches:
 # headline table -> selection criteria -> item-level zero-shot cross-tab.
 # Everything here is batch; nothing is meant to be run on a login node.
-
-source "$(dirname "$0")/_slurm_common.sh"
+for DIR in "${SLURM_SUBMIT_DIR}" "." "$(dirname "$0")" "$HOME/VisionCCS/vision_ccs"; do
+  if [ -n "$DIR" ] && [ -f "$DIR/_slurm_common.sh" ]; then
+    source "$DIR/_slurm_common.sh"
+    break
+  fi
+done
 
 OUT=./reanalysis_final.json
 

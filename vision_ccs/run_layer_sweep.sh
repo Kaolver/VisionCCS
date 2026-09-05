@@ -17,8 +17,12 @@
 # REPORTING RULE: the full curve is the result. --pick-layer names a single
 # layer using the label-free consistency criterion and prints what that honest
 # choice cost against the oracle layer. Never quote the max over layers.
-
-source "$(dirname "$0")/_slurm_common.sh"
+for DIR in "${SLURM_SUBMIT_DIR}" "." "$(dirname "$0")" "$HOME/VisionCCS/vision_ccs"; do
+  if [ -n "$DIR" ] && [ -f "$DIR/_slurm_common.sh" ]; then
+    source "$DIR/_slurm_common.sh"
+    break
+  fi
+done
 
 if [ ! -d ./caches_v3 ]; then
   echo "ERROR: ./caches_v3 not found -- run run_extract_v3.sh first"; exit 1

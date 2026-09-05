@@ -15,8 +15,12 @@
 # are run so the size of that effect is measured rather than assumed:
 #   (default)         with the hint      -> zeroshot_{model}_*.npz
 #   --no-instruction  matched to CCS     -> zeroshot_{model}_noinstr_*.npz
-
-source "$(dirname "$0")/_slurm_common.sh"
+for DIR in "${SLURM_SUBMIT_DIR}" "." "$(dirname "$0")" "$HOME/VisionCCS/vision_ccs"; do
+  if [ -n "$DIR" ] && [ -f "$DIR/_slurm_common.sh" ]; then
+    source "$DIR/_slurm_common.sh"
+    break
+  fi
+done
 
 for MODEL in qwen2 llava; do
   echo ""

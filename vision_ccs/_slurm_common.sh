@@ -21,6 +21,11 @@ for V in venv_ccs venv ../venv_ccs ../venv; do
   if [ -f "$V/bin/activate" ]; then source "$V/bin/activate"; break; fi
 done
 
+if ! python -c "import torch" 2>/dev/null; then
+  echo "ERROR: Active python ($(which python)) cannot import torch. Check venv activation." >&2
+  exit 1
+fi
+
 echo "host      : $(hostname)"
 echo "workdir   : $(pwd)"
 echo "python    : $(which python)"

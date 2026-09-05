@@ -19,8 +19,12 @@
 #
 # 2x2 grid. logreg is skipped: it is sklearn, cannot take the constraint, and is
 # the slowest part of a run.
-
-source "$(dirname "$0")/_slurm_common.sh"
+for DIR in "${SLURM_SUBMIT_DIR}" "." "$(dirname "$0")" "$HOME/VisionCCS/vision_ccs"; do
+  if [ -n "$DIR" ] && [ -f "$DIR/_slurm_common.sh" ]; then
+    source "$DIR/_slurm_common.sh"
+    break
+  fi
+done
 
 CACHE=./hidden_states_cache_final
 COMMON="--cache-dir $CACHE --models qwen2 --seeds 42 1 2 3 4 \
