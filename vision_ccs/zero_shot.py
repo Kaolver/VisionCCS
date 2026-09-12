@@ -111,6 +111,10 @@ def build_inputs(model_tag, proc, image, question, instruction=True):
 # logit margin are predicted 'yes', so exactly 50% are yes regardless of the
 # model's bias. Uses a stable sort so bf16 ties resolve deterministically.
 # ============================================================================
+
+#Yes: 3,653
+#No: 3,728
+#Total: 7,381 so calliberation makes sense and can outperform ccs
 def calibrate(margin):
     """Burns' calibrated zero-shot, rank-based: the top half of items by margin
     are predicted yes, so the prediction rate is exactly 50/50 regardless of the
@@ -132,7 +136,6 @@ def calibrate(margin):
     # are the n//2 largest margins -> predicted yes. For odd n that is floor(n/2).
     preds[order[n - n // 2:]] = 1          # top half -> yes
     return preds
-
 
 def calibrated_accuracy(margin, labels):
     """Calibrated zero-shot accuracy. Also returns the median margin, which is
