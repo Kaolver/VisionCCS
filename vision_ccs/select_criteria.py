@@ -118,21 +118,23 @@ def main():
     # correlation of each criterion with accuracy, pooled over all probes
     acc_all = np.array([r['test_acc_flipped'] for r in allr])
     print('Correlation with test accuracy (pooled over every restart):')
+    # One row per underlying quantity: several CRITERIA entries share a key and
+    # differ only in sort direction, which does not change the correlation.
     seen = set()
     for name, (key, _) in CRITERIA.items():
         if key not in allr[0] or key in seen:
             continue
         seen.add(key)
-        name = key
         v = np.array([r[key] for r in allr], dtype=float)
+        label = name
         if key == 'loss':
             # losses span many orders of magnitude (1e-6 .. 1e-1); correlate the LOG so a
             # few near-zero losses do not dominate. maximum(..) guards log(0).
             v = np.log(np.maximum(v, 1e-12))
-            name = name + ' [log]'
+            label = f'{name} [log]'
         # Pearson r between criterion and accuracy; nan if the criterion is constant
         rho = np.corrcoef(v, acc_all)[0, 1] if v.std() > 0 else float('nan')
-        print(f'  {name:22s} {rho:+.3f}')
+        print(f'  {label:22s} {rho:+.3f}')
 
     print('\nAccuracy of the restart each rule selects (mean over runs):')
     # three reference rows per run: best possible, worst possible, and the EXPECTED

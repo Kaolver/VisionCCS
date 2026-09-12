@@ -53,6 +53,21 @@ for MODEL in qwen2 llava; do
       --out "./layer_sweep_${MODEL}_shuffled.json"
 done
 
+
+# B3 distractor control (Farquhar et al. 2312.10029). Needs the banner caches
+# from `extract.py --distractor banner`. The banner is independent of the answer,
+# so the "vs banner" column must sit at chance.
+for MODEL in qwen2 llava; do
+  if ls ./caches_v3/hs_${MODEL}_*_distract-banner.npz >/dev/null 2>&1; then
+    echo ""
+    echo "######################################################################"
+    echo "# $MODEL : BANNER DISTRACTOR CONTROL (B3)"
+    echo "######################################################################"
+    python layer_sweep.py --cache-dir ./caches_v3 --model "$MODEL" \
+        --distractor banner --seeds 42 1 2 --selection val_consistency \
+        --skip-logreg --out "./layer_sweep_${MODEL}_banner.json"
+  fi
+done
 echo ""
 echo "=== outputs ==="
 ls -lh ./layer_sweep_*.json

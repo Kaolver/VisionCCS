@@ -4,49 +4,44 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --nodes=1
 #SBATCH --gpus-per-node=1
-#SBATCH --time=06:00:00
+#SBATCH --time=12:00:00
 #SBATCH --partition=gpu_a100
 #SBATCH --mem=64G
 
 # Phase 1: all-layer extraction at corrected token positions, plus the
 # shuffled-image control, for qwen2 and llava.
+#
+# TEMPLATES=all adds the multi-template caches (5x the forward passes). Burns
+# runs 8-13 templates per dataset; with one there is no surface variation for
+# truth to be consistent across. TEMPLATES=plain reproduces the existing caches.
+for DIR in "${SLURM_SUBMIT_DIR}" "." "$(dirname "$0")" "$HOME/VisionCCS/vision_ccs"; do
+  if [ -n "$DIR" ] && [ -f "$DIR/_slurm_common.sh" ]; then
+    source "$DIR/_slurm_common.sh"
+    break
+  fi
+done
 
-if [ -n "$SLURM_SUBMIT_DIR" ] && [ -f "$SLURM_SUBMIT_DIR/extract.py" ]; then
-  cd "$SLURM_SUBMIT_DIR" || exit 1
-elif [ -d "$HOME/VisionCCS/vision_ccs" ]; then
-  cd "$HOME/VisionCCS/vision_ccs" || exit 1
-elif [ -d "$HOME/vision_ccs" ]; then
-  cd "$HOME/vision_ccs" || exit 1
-fi
+TEMPLATES="${TEMPLATES:-plain}"
+MODELS="${MODELS:-qwen2 llava}"
 
-if command -v module &> /dev/null; then
-  module purge 2>/dev/null || true
-  module load 2023 2>/dev/null || true
-  module load Python/3.11.3-GCCcore-12.3.0 2>/dev/null || true
-  module load CUDA/12.1.1 2>/dev/null || true
-fi
-
-if [ -f "venv_ccs/bin/activate" ]; then
-  source venv_ccs/bin/activate
-elif [ -f "venv/bin/activate" ]; then
-  source venv/bin/activate
-elif [ -f "../venv_ccs/bin/activate" ]; then
-  source ../venv_ccs/bin/activate
-elif [ -f "../venv/bin/activate" ]; then
-  source ../venv/bin/activate
-fi
-
-nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
-
-for MODEL in qwen2 llava; do
-  echo "=== $MODEL : real images ==="
-  python extract.py --model "$MODEL" --layer-stride 2 --out-dir ./caches_v3
+for MODEL in $MODELS; do
+  echo "=== $MODEL : real images (templates: $TEMPLATES) ==="
+  python extract.py --model "$MODEL" --layer-stride 2 --out-dir ./caches_v3 \
+      --templates $TEMPLATES
 
   echo "=== $MODEL : shuffled-image control ==="
   python extract.py --model "$MODEL" --layer-stride 2 --out-dir ./caches_v3 \
-      --shuffle-images
+      --templates $TEMPLATES --shuffle-images
 done
 
 echo "=== cache sizes ==="
 du -sh ./caches_v3
 ls -lh ./caches_v3
+
+# B3: banner-distractor caches -- the only control that tests identifiability
+# rather than performance.
+for MODEL in $MODELS; do
+  echo "=== $MODEL : banner-distractor control ==="
+  python extract.py --model "$MODEL" --layer-stride 2 --out-dir ./caches_v3 \
+      --templates $TEMPLATES --distractor banner
+done

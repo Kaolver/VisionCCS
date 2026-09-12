@@ -211,9 +211,18 @@ __marimo__/
 ###############################
 /vqa_data/
 /venv_ccs/
-# Cached hidden states (large, regenerable)
-hidden_states_cache*/
-*.npz
-reanalysis_results*.json
 
+# Cached hidden states and activation dumps: large and regenerable.
+hidden_states_cache*/
+caches_v3/
+*.npz
 *.html
+
+# Downloaded benchmark annotations (see pope_to_vqa.py).
+/pope/
+
+# Analysis outputs are deliberately NOT ignored: reanalysis_*.json,
+# ablation_*.json, layer_sweep*.json and transfer*.json are small, and
+# committing them keeps a reported claim traceable to the run behind it.
+# (The old reanalysis_results*.json rule matched no filename the scripts
+# actually write, so it is dropped rather than widened.)

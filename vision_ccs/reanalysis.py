@@ -72,7 +72,7 @@ def build_pairs(vqa_json, category, mode, seed=42):
         vqa_data = json.load(f)[category]
 
     if mode == 'supervised':
-        samples = vqa_data[:len(vqa_data)]
+        samples = list(vqa_data)
     elif mode == 'ccs':
         n_samples = len(vqa_data)
         rng = np.random.default_rng(seed)
@@ -110,25 +110,23 @@ def _image_exists(image_id, image_dirs):
 # label sequence is then compared as a checksum before anything is trusted.
 # ============================================================================
 def align_pairs(pairs, labels, image_dirs=None):
-    """Attach image_ids to cached rows, verified against the label sequence.
+    """Recover which pair produced each cached row. Returns (kept_pairs, status).
 
-    Extraction appends in pair order but SKIPS pairs whose image was missing on
-    disk. Those skips are scattered through the shuffled order, not clustered at
-    the tail, so a prefix match usually fails once anything was dropped.
-
-    When image_dirs is given we replay the same existence check the extractor
-    ran, which reproduces the skip set exactly and recovers the alignment. The
-    label sequence still has to match afterwards -- we never guess.
+    Extraction appends in pair order but skips pairs whose image was missing,
+    and those skips are scattered through the shuffled order, so a prefix match
+    fails once anything was dropped. Given image_dirs we replay the same
+    existence check to reproduce the skip set. The label sequence must match
+    afterwards either way -- never guess.
     """
     pair_labels = np.array([p['label'] for p in pairs], dtype=int)
 
     # case 1: nothing was skipped -> every pair maps to a cache row
     if len(pair_labels) == len(labels) and np.array_equal(pair_labels, labels):
-        return np.array([p['image_id'] for p in pairs]), 'exact'
+        return list(pairs), 'exact'
 
     # case 2: extraction stopped early (e.g. --limit) -> cache is a prefix
     if len(labels) < len(pair_labels) and np.array_equal(pair_labels[:len(labels)], labels):
-        return np.array([p['image_id'] for p in pairs[:len(labels)]]), 'prefix'
+        return list(pairs[:len(labels)]), 'prefix'
 
     if image_dirs:
         # case 3: replay the extractor's skip rule (image missing on disk) and see
@@ -137,13 +135,20 @@ def align_pairs(pairs, labels, image_dirs=None):
         kept_labels = np.array([p['label'] for p in kept], dtype=int)
         if len(kept_labels) == len(labels) and np.array_equal(kept_labels, labels):
             n_skip = len(pair_labels) - len(kept_labels)
-            return (np.array([p['image_id'] for p in kept]),
-                    f'recovered ({n_skip} rows dropped for missing images)')
+            return kept, f'recovered ({n_skip} rows dropped for missing images)'
         return None, (f'MISMATCH after replay (pairs={len(pair_labels)}, '
                       f'on-disk={len(kept_labels)}, cached={len(labels)})')
 
     return None, (f'MISMATCH (pairs={len(pair_labels)}, cached={len(labels)}) '
                   f'-- pass --image-dirs to recover')
+
+
+def pairs_field(kept_pairs, field):
+    """Column of a field from align_pairs() output, or None if unaligned."""
+    if kept_pairs is None:
+        return None
+    return np.array([p[field] for p in kept_pairs])
+
 
 
 # ============================================================================
@@ -179,15 +184,91 @@ def make_split(n, seed, train_frac, groups=None):
     return np.where(mask)[0], np.where(~mask)[0]
 
 
+def _kmeans(X, k, seed=0, iters=50):
+    """Minimal Lloyd's k-means -> (centroids, assignments).
+
+    Hand-written so the normalization path carries no sklearn dependency and is
+    reproducible from the seed alone.
+    """
+    rng = np.random.default_rng(seed)
+    n = len(X)
+    k = max(1, min(int(k), n))
+    C = X[rng.permutation(n)[:k]].astype(np.float32).copy()
+    assign = np.zeros(n, dtype=int)
+    for _ in range(iters):
+        d = ((X ** 2).sum(1, keepdims=True) - 2 * X @ C.T + (C ** 2).sum(1)[None, :])
+        new = np.argmin(d, axis=1)
+        if np.array_equal(new, assign):
+            break
+        assign = new
+        for j in range(k):
+            m = assign == j
+            if m.any():
+                C[j] = X[m].mean(axis=0)
+    return C, assign
+
+
+def _assign(X, C):
+    d = ((X ** 2).sum(1, keepdims=True) - 2 * X @ C.T + (C ** 2).sum(1)[None, :])
+    return np.argmin(d, axis=1)
+
+
+def cluster_normalize(pos_tr, neg_tr, pos_te, neg_te, k, var_normalize, seed=0):
+    """Cluster-norm (Burger et al., arXiv:2407.18712).
+
+    Normalizes within clusters so a prominent feature that merely GROUPS the
+    data cannot be what the probe locks onto. Per-branch centering alone only
+    removes the constant answer-token offset.
+
+    Inductive: centroids and per-cluster stats are fit on train; test rows go to
+    the nearest train centroid. Clusters with <2 train rows fall back to the
+    branch's global train stats.
+    """
+    eps = 1e-8
+    C, _ = _kmeans(np.concatenate([pos_tr, neg_tr], axis=0), k, seed=seed)
+    a_ptr, a_ntr = _assign(pos_tr, C), _assign(neg_tr, C)
+    a_pte, a_nte = _assign(pos_te, C), _assign(neg_te, C)
+
+    def branch(x_tr, x_te, a_tr, a_te):
+        g_mu = x_tr.mean(axis=0, keepdims=True)
+        g_sd = (x_tr.std(axis=0, keepdims=True) + eps) if var_normalize else np.float32(1.0)
+        o_tr, o_te = np.empty_like(x_tr), np.empty_like(x_te)
+        for j in range(len(C)):
+            m_tr, m_te = a_tr == j, a_te == j
+            if m_tr.sum() < 2:
+                mu, sd = g_mu, g_sd
+            else:
+                mu = x_tr[m_tr].mean(axis=0, keepdims=True)
+                sd = ((x_tr[m_tr].std(axis=0, keepdims=True) + eps)
+                      if var_normalize else np.float32(1.0))
+            if m_tr.any():
+                o_tr[m_tr] = (x_tr[m_tr] - mu) / sd
+            if m_te.any():
+                o_te[m_te] = (x_te[m_te] - mu) / sd
+        return o_tr, o_te
+
+    p_tr, p_te = branch(pos_tr, pos_te, a_ptr, a_pte)
+    n_tr, n_te = branch(neg_tr, neg_te, a_ntr, a_nte)
+    return [p_tr, n_tr, p_te, n_te]
+
+
 # ============================================================================
 # NOTE (review): scheme='per_split' equals vision_ccs.py's normalize() (each of
 # the four arrays centred/scaled by its OWN stats; numpy population std matches
 # torch unbiased=False) up to the eps=1e-8 added here. scheme='train_stats'
 # scales test with train statistics, which is NOT what the original CCS
-# notebook's get_acc does; it exists as an ablation.
+# notebook's get_acc does; it exists as an ablation. scheme='cluster'
+# normalizes within k-means clusters (cluster_normalize, 2407.18712)
+# and is likewise an ablation, not the original behaviour.
 # ============================================================================
-def normalize(pos_tr, neg_tr, pos_te, neg_te, scheme, var_normalize):
-    """Normalize activation arrays."""
+def normalize(pos_tr, neg_tr, pos_te, neg_te, scheme, var_normalize,
+              cluster_k=8, seed=0):
+    """Normalize activation arrays.
+
+    per_split   -- each split uses its own stats. Burns-faithful, transductive.
+    train_stats -- test uses train stats. Inductive.
+    cluster     -- cluster-norm, see cluster_normalize(). Inductive.
+    """
     eps = 1e-8
 
     def stats(x):
@@ -211,6 +292,9 @@ def normalize(pos_tr, neg_tr, pos_te, neg_te, scheme, var_normalize):
         nmu, nsd = stats(neg_tr)
         return [(pos_tr - pmu) / psd, (neg_tr - nmu) / nsd,
                 (pos_te - pmu) / psd, (neg_te - nmu) / nsd]
+    if scheme == 'cluster':
+        return cluster_normalize(pos_tr, neg_tr, pos_te, neg_te,
+                                 cluster_k, var_normalize, seed=seed)
     raise ValueError(f'unknown scheme {scheme!r}')
 
 
@@ -287,7 +371,13 @@ def auroc(scores, y):
 # normal-approximation 95% CI are additions over vision_ccs.py's reporting.
 # ============================================================================
 def score_report(scores, y):
-    """Compute accuracy and AUROC metrics."""
+    """Compute accuracy and AUROC metrics.
+
+    ci95 is a naive binomial interval on the FLIPPED accuracy: optimistic near
+    chance, and on ungrouped splits the effective n is below n_test because
+    items share images. Read it as a scale, not a test; for significance use the
+    paired McNemar in compare_zeroshot.py.
+    """
     y = np.asarray(y).astype(int)
     # hard prediction at 0.5; CCS orientation is arbitrary so both readings are kept
     preds = (np.asarray(scores) > 0.5).astype(int)
@@ -512,6 +602,14 @@ def train_ccs(pos_tr, neg_tr, pos_te, neg_te, cfg, seed, y_tr=None, y_te=None):
         bp, bn = best_probe(Tp).squeeze(-1), best_probe(Tn).squeeze(-1)
         scores = (0.5 * (bp + (1 - bn))).cpu().numpy()
         diag = probe_diagnostics(bp.cpu().numpy(), bn.cpu().numpy())
+        # Selected probe's val-slice diagnostics. Carried out explicitly so
+        # callers that drop `restarts` (layer_sweep) still have an inductive
+        # criterion and don't fall back to the transductive test consistency.
+        val_diag = {}
+        if len(val_i):
+            vp, vn = best_probe(Vp).squeeze(-1), best_probe(Vn).squeeze(-1)
+            val_diag = {'val_' + k: v for k, v in
+                        probe_diagnostics(vp.cpu().numpy(), vn.cpu().numpy()).items()}
         train_acc = None
         if y_fit is not None:
             s_tr = (0.5 * (best_probe(Xp).squeeze(-1)
@@ -521,7 +619,7 @@ def train_ccs(pos_tr, neg_tr, pos_te, neg_te, cfg, seed, y_tr=None, y_te=None):
     return scores, {'best_loss': best_loss, 'restarts': restarts,
                     'selection': rule, 'n_fit': int(len(fit_i)),
                     'n_val': int(len(val_i)),
-                    'train_acc_flipped': train_acc, **diag}
+                    'train_acc_flipped': train_acc, **diag, **val_diag}
 
 
 # ============================================================================
@@ -610,15 +708,76 @@ def train_logreg(pos_tr, neg_tr, pos_te, neg_te, y_tr, seed):
                                          'n_iter': n_iter, 'converged': n_iter < 1000}
 
 
+# Unsupervised baselines on the contrast-pair difference. In text, PCA and LDA
+# on these differences reach 97% and 98% of CCS (Emmons), so without them a CCS
+# number cannot be told apart from a one-line eigenvector. All score in [0, 1]
+# so score_report() thresholds at 0.5 and applies the same orientation flip.
+
+def _squash(z):
+    """Map a centered projection to [0,1] so score_report can threshold at 0.5.
+
+    Strictly increasing, so AUROC is rank-identical and the boundary stays at
+    z > 0 for any positive scale. Not a calibrated probability.
+    """
+    z = np.asarray(z, dtype=float)
+    s = np.std(z) + 1e-12
+    return 1.0 / (1.0 + np.exp(-z / s))
+
+
+def train_pca_tpc(pos_tr, neg_tr, pos_te, neg_te, seed=0):
+    """CRC-TPC (Burns Sec 3.2): top PC of the differences, fit on train only."""
+    d_tr, d_te = pos_tr - neg_tr, pos_te - neg_te
+    mu, W = _randomized_pca(d_tr, 1, seed=seed)
+    return _squash(((d_te - mu) @ W)[:, 0]), {'method': 'crc_tpc'}
+
+
+def train_kmeans_diff(pos_tr, neg_tr, pos_te, neg_te, seed=0):
+    """k=2 clustering of the differences; score = signed margin."""
+    d_tr, d_te = pos_tr - neg_tr, pos_te - neg_te
+    mu = d_tr.mean(axis=0, keepdims=True)
+    C, _ = _kmeans(d_tr - mu, 2, seed=seed)
+    if len(C) < 2:
+        return _squash(np.zeros(len(d_te))), {'method': 'kmeans', 'degenerate': True}
+    x = d_te - mu
+    margin = (np.linalg.norm(x - C[0], axis=1) - np.linalg.norm(x - C[1], axis=1))
+    return _squash(margin), {'method': 'kmeans'}
+
+
+def train_random_dir(pos_tr, neg_tr, pos_te, neg_te, seed=0):
+    """A random unit direction. Must land at chance; the sanity floor."""
+    rng = np.random.default_rng(seed + 777)
+    w = rng.normal(size=pos_tr.shape[1])
+    w /= np.linalg.norm(w) + 1e-12
+    d_tr, d_te = pos_tr - neg_tr, pos_te - neg_te
+    return _squash((d_te - d_tr.mean(axis=0, keepdims=True)) @ w), {'method': 'random'}
+
+
+def train_mean_diff(pos_tr, neg_tr, pos_te, neg_te, y_tr, seed=0):
+    """SUPERVISED difference-of-class-means direction.
+
+    No unsupervised version exists: after per-branch centering the grand mean of
+    (pos - neg) is identically zero, so the mean only informs within classes.
+    """
+    d_tr, d_te = pos_tr - neg_tr, pos_te - neg_te
+    y_tr = np.asarray(y_tr).astype(int)
+    if y_tr.sum() == 0 or y_tr.sum() == len(y_tr):
+        return _squash(np.zeros(len(d_te))), {'method': 'mean_diff', 'degenerate': True}
+    w = d_tr[y_tr == 1].mean(axis=0) - d_tr[y_tr == 0].mean(axis=0)
+    w /= np.linalg.norm(w) + 1e-12
+    return _squash((d_te - d_tr.mean(axis=0, keepdims=True)) @ w), {'method': 'mean_diff'}
+
+
+
 # ============================================================================
 # NOTE (review): one (model, category, split kind, seed) cell: split -> normalize
 # -> CCS + supervised probe + logreg, then optional controls (Gaussian noise,
 # PCA-k) run through the SAME three methods. Per-item CCS predictions are
-# stored ORIENTED (flipped if raw_acc < 0.5) so compare_zeroshot.py can align
-# them with zero_shot.py row-for-row via test_idx.
+# stored ORIENTED (flipped if raw_acc < 0.5) and accompanied by
+# test_question_ids, so compare_zeroshot.py joins them to zero_shot.py by
+# question_id rather than by row position.
 # ============================================================================
 def run_cell(pos, neg, labels, image_ids, cfg, seed, grouped, norm_scheme,
-             controls=False, pca_k=50):
+             controls=False, pca_k=50, question_ids=None):
     """Evaluate all methods on a single configuration cell."""
     # grouped split needs image ids (from align_pairs); None -> plain random split
     groups = image_ids if grouped else None
@@ -640,6 +799,16 @@ def run_cell(pos, neg, labels, image_ids, cfg, seed, grouped, norm_scheme,
         tag_into['ccs'] = {**score_report(s, y_te), **meta, '_scores': [float(v) for v in s]}
         s, meta = train_supervised_probe(p_tr, n_tr, p_te, n_te, y_tr, cfg, seed)
         tag_into['sup_probe'] = {**score_report(s, y_te), **meta}
+
+        if not cfg.get('skip_baselines'):
+            for name, fn in (('crc_tpc', train_pca_tpc),
+                             ('kmeans_diff', train_kmeans_diff),
+                             ('random_dir', train_random_dir)):
+                s, meta = fn(p_tr, n_tr, p_te, n_te, seed=seed)
+                tag_into[name] = {**score_report(s, y_te), **meta}
+            s, meta = train_mean_diff(p_tr, n_tr, p_te, n_te, y_tr, seed=seed)
+            tag_into['mean_diff'] = {**score_report(s, y_te), **meta}
+
         if cfg.get('skip_logreg'):
             # logreg is sklearn and cannot take the unit-norm constraint, so it
             # is invariant along the --weight-norm axis; recomputing it for every
@@ -652,18 +821,19 @@ def run_cell(pos, neg, labels, image_ids, cfg, seed, grouped, norm_scheme,
             except ImportError:
                 tag_into['logreg'] = {'error': 'sklearn unavailable'}
 
-    # split THEN normalise, so test statistics never leak into train under per_split
-    raw = normalize(pos[tr], neg[tr], pos[te], neg[te], norm_scheme, cfg['var_normalize'])
+    # split THEN normalise, so test statistics never leak into train
+    raw = normalize(pos[tr], neg[tr], pos[te], neg[te], norm_scheme,
+                    cfg['var_normalize'], cluster_k=cfg.get('cluster_k', 8), seed=seed)
     methods(*raw, out)
 
-    # Per-item test predictions, so CCS can be compared against the model's own
-    # zero-shot answer ITEM BY ITEM, not just in aggregate. Two methods can hit
-    # the same accuracy while disagreeing on which items they get right; if CCS
-    # agrees with zero-shot almost everywhere, it found the model's "what will I
-    # answer" direction rather than a truth direction. test_idx indexes rows of
-    # the cache, which build_pairs() ordering also indexes, so these line up with
-    # zero_shot.py's output row-for-row.
+    # Per-item test predictions, so CCS can be compared against zero-shot item by
+    # item: two methods can share an accuracy and disagree on which items.
+    # question_ids are the join key -- test_idx is positional and zero_shot.py
+    # skips items independently, so a positional join can silently misalign.
     out['test_idx'] = [int(i) for i in te]
+    if question_ids is not None:
+        out['test_question_ids'] = [int(q) for q in np.asarray(question_ids)[te]]
+    out['test_labels'] = [int(v) for v in y_te]
     if '_scores' in out['ccs']:
         # per-item CCS predictions for compare_zeroshot.py: thresholded, then ORIENTED
         # with the same flip score_report used, and stored next to their row indices
@@ -682,14 +852,16 @@ def run_cell(pos, neg, labels, image_ids, cfg, seed, grouped, norm_scheme,
         out['controls'] = {}
         # control 1: replace features by noise, normalise, rerun the three methods
         g = gaussian_control(*raw, seed=seed)
-        gn = normalize(*g, scheme=norm_scheme, var_normalize=cfg['var_normalize'])
+        gn = normalize(*g, scheme=norm_scheme, var_normalize=cfg['var_normalize'],
+                       cluster_k=cfg.get('cluster_k', 8), seed=seed)
         out['controls']['gaussian'] = {}
         methods(*gn, out['controls']['gaussian'])
 
         # control 2: project RAW (un-normalised) features to k PCs fit on train, then
         # normalise and rerun
         pc = pca_reduce(pos[tr], neg[tr], pos[te], neg[te], pca_k, seed=seed)
-        pcn = normalize(*pc, scheme=norm_scheme, var_normalize=cfg['var_normalize'])
+        pcn = normalize(*pc, scheme=norm_scheme, var_normalize=cfg['var_normalize'],
+                        cluster_k=cfg.get('cluster_k', 8), seed=seed)
         out['controls'][f'pca{pca_k}'] = {}
         methods(*pcn, out['controls'][f'pca{pca_k}'])
 
@@ -730,9 +902,18 @@ def main():
     ap.add_argument('--skip-logreg', action='store_true',
                     help='skip the logistic-regression baseline (invariant along '
                          'the --weight-norm axis, and the slowest part of a run)')
+    ap.add_argument('--skip-baselines', action='store_true',
+                    help='skip the unsupervised baselines (CRC-TPC / k-means / '
+                         'random direction) and the supervised mean-difference')
     ap.add_argument('--val-frac', type=float, default=0.2,
                     help='fraction of train held out for label-free selection')
-    ap.add_argument('--norm', default='per_split', choices=['per_split', 'train_stats'])
+    ap.add_argument('--norm', default='per_split',
+                    choices=['per_split', 'train_stats', 'cluster'],
+                    help="'per_split' is Burns-faithful but transductive; "
+                         "'train_stats' is inductive; 'cluster' is cluster-norm "
+                         '(2407.18712), inductive and distractor-resistant')
+    ap.add_argument('--cluster-k', type=int, default=8,
+                    help='number of clusters for --norm cluster')
     ap.add_argument('--train-frac', type=float, default=0.6)
     ap.add_argument('--epochs', type=int, default=1000)
     ap.add_argument('--ntries', type=int, default=10)
@@ -752,7 +933,9 @@ def main():
            'var_normalize': not args.no_var_normalize,
            'selection': args.selection, 'val_frac': args.val_frac,
            'weight_norm': args.weight_norm,
-           'skip_logreg': args.skip_logreg}
+           'skip_logreg': args.skip_logreg,
+           'skip_baselines': args.skip_baselines,
+           'cluster_k': args.cluster_k}
 
     results = {'config': {**cfg, 'norm': args.norm, 'splits': args.splits,
                           'controls': args.controls, 'pca_k': args.pca_k,
@@ -770,7 +953,9 @@ def main():
             # rebuild the row order the cache was extracted in (depends on cache kind)
             pairs = build_pairs(args.vqa_json, category,
                                 mode='ccs' if kind == 'ccs' else 'supervised')
-            image_ids, status = align_pairs(pairs, labels, args.image_dirs)
+            kept, status = align_pairs(pairs, labels, args.image_dirs)
+            image_ids = pairs_field(kept, 'image_id')
+            question_ids = pairs_field(kept, 'question_id')
 
             print(f'\n=== {model_tag} / {category} ===')
             print(f'  cache {path.name}')
@@ -792,7 +977,9 @@ def main():
                 for seed in args.seeds:
                     cell = run_cell(pos, neg, labels, image_ids, cfg, seed,
                                     split_kind == 'grouped', args.norm,
-                                    controls=args.controls, pca_k=args.pca_k)
+                                    controls=args.controls, pca_k=args.pca_k,
+                                    question_ids=question_ids)
+
                     # run key e.g. 'grouped/seed42'; compare_zeroshot / select_criteria parse it
                     results['cells'][key]['runs'][f'{split_kind}/seed{seed}'] = cell
                     _print_cell(split_kind, seed, cell, args.pca_k)
@@ -819,6 +1006,13 @@ def _print_cell(split_kind, seed, cell, pca_k):
           f"      logreg  raw {_fmt(cell['logreg'])}"
           + ('' if 'error' in cell['logreg']
              else f"  (C={cell['logreg']['C']}, converged={cell['logreg']['converged']})"))
+
+    base = [(k, cell[k]) for k in ('crc_tpc', 'kmeans_diff', 'mean_diff', 'random_dir')
+            if k in cell]
+    if base:
+        print('      baselines  ' + '  '.join(
+            f"{k} {v['flipped_acc']:.1%}" for k, v in base)
+            + '   (mean_diff is SUPERVISED)')
     for name in ('gaussian', f'pca{pca_k}'):
         ctl = cell.get('controls', {}).get(name)
         if ctl:
@@ -830,11 +1024,12 @@ def _print_cell(split_kind, seed, cell, pca_k):
 
 def _print_summary(results, pca_k):
     """Print comparison summary table."""
-    print('\n' + '=' * 100)
-    print('SUMMARY  (mean +/- std over seeds; CCS shown as flipped acc, '
-          'baselines as raw acc)')
-    print('=' * 100)
-    hdr = f"{'cell':34s} {'split':10s} {'CCS':>15s} {'sup_probe':>15s} {'logreg':>15s} {'CCS auroc':>12s}"
+    print('\n' + '=' * 118)
+    print('SUMMARY  (mean +/- std over seeds; unsupervised methods shown as '
+          'flipped acc, supervised as raw acc)')
+    print('=' * 118)
+    hdr = (f"{'cell':34s} {'split':10s} {'CCS':>15s} {'CRC-TPC':>15s} "
+           f"{'k-means':>15s} {'sup_probe':>15s} {'logreg':>15s} {'CCS auroc':>12s}")
     print(hdr)
     print('-' * len(hdr))
 
@@ -863,9 +1058,25 @@ def _print_summary(results, pca_k):
                 continue
             print(f"{key:34s} {split_kind:10s} "
                   f"{cellstr(agg(runs, ['ccs', 'flipped_acc'])):>15s} "
+                  f"{cellstr(agg(runs, ['crc_tpc', 'flipped_acc'])):>15s} "
+                  f"{cellstr(agg(runs, ['kmeans_diff', 'flipped_acc'])):>15s} "
                   f"{cellstr(agg(runs, ['sup_probe', 'raw_acc'])):>15s} "
                   f"{cellstr(agg(runs, ['logreg', 'raw_acc'])):>15s} "
                   f"{cellstr(agg(runs, ['ccs', 'flipped_auroc']), pct=False):>12s}")
+
+    # CRC-TPC as a fraction of CCS. In text this sits around 97%.
+    ccs_v, tpc_v = [], []
+    for c in results['cells'].values():
+        for r in c['runs'].values():
+            if 'crc_tpc' in r and 'flipped_acc' in r.get('crc_tpc', {}):
+                ccs_v.append(r['ccs']['flipped_acc'])
+                tpc_v.append(r['crc_tpc']['flipped_acc'])
+    if ccs_v:
+        m_ccs, m_tpc = float(np.mean(ccs_v)), float(np.mean(tpc_v))
+        print(f"\nCCS {m_ccs:.1%} vs CRC-TPC {m_tpc:.1%} over {len(ccs_v)} runs "
+              f"-> CRC-TPC reaches {m_tpc / max(m_ccs, 1e-9):.1%} of CCS "
+              f"({m_tpc - m_ccs:+.1%})")
+
 
     # does a lower final loss predict a better probe? Pool every stored restart
     xs, ys = [], []

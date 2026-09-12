@@ -30,8 +30,14 @@ python select_criteria.py "$OUT" --combine
 
 echo ""
 echo "=== 3. item-level CCS vs zero-shot ==="
+# Both variants: the instructed one is what the first run used, _noinstr is
+# prompt-matched to what CCS extraction sees and is the fair comparison.
 if [ -d ./zeroshot ]; then
-  python compare_zeroshot.py "$OUT" --zeroshot-dir ./zeroshot
+  for TAG in "" "_noinstr"; do
+    echo ""
+    echo "--- zero-shot variant: ${TAG:-with instruction} ---"
+    python compare_zeroshot.py "$OUT" --zeroshot-dir ./zeroshot --tag "$TAG"
+  done
 else
   echo "no ./zeroshot -- run run_zeroshot.sh first"
 fi

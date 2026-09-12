@@ -18,15 +18,64 @@ import numpy as np
 from zero_shot import calibrate
 
 
-def load_zeroshot(zs_dir, model_tag, category):
+def load_zeroshot(zs_dir, model_tag, category, tag=''):
     # file written by zero_shot.py: one row per item that had an image on disk
-    f = Path(zs_dir) / f'zeroshot_{model_tag}_{category}.npz'
+    f = Path(zs_dir) / f'zeroshot_{model_tag}{tag}_{category}.npz'
     if not f.exists():
         return None
-    d = np.load(f)
     # margin > 0  <=>  the model puts more next-token mass on 'Yes' than on 'No'.
     # Only the DIFFERENCE matters for a two-way decision, so we keep just that.
-    return {'margin': d['yes_logit'] - d['no_logit'], 'labels': d['labels'].astype(int)}
+    d = np.load(f)
+    out = {'margin': d['yes_logit'] - d['no_logit'],
+           'labels': d['labels'].astype(int),
+           'question_ids': d['question_ids'] if 'question_ids' in d else None,
+           'file': f.name}
+    return out
+
+
+def join_on_question_id(zs, qids, labels, min_coverage=0.9):
+    """Line CCS test rows up with zero-shot rows by question_id.
+
+    Returns (keep, zs_rows, status), so ccs_pred[keep] and zs_margin[zs_rows]
+    are item-for-item aligned, or (None, None, reason) if the join can't be
+    trusted. A positional join would be valid only if zero_shot.py and the
+    extractor skipped identical items in identical order; they skip
+    independently, so one divergent skip shifts every row silently.
+
+    Unmatched items are dropped and the coverage reported; below min_coverage
+    the two artefacts probably aren't the same extraction, so refuse. The label
+    cross-check catches the rest.
+    """
+    if zs['question_ids'] is None:
+        return None, None, ('zero-shot file predates question_id logging -- '
+                            're-run zero_shot.py to enable the join')
+    if qids is None:
+        return None, None, ('results JSON has no test_question_ids -- re-run '
+                            'reanalysis.py to enable the join')
+
+    index = {int(q): i for i, q in enumerate(zs['question_ids'])}
+    keep, rows = [], []
+    for k, q in enumerate(qids):
+        i = index.get(int(q))
+        if i is not None:
+            keep.append(k)
+            rows.append(i)
+
+    coverage = len(keep) / max(len(qids), 1)
+    if coverage < min_coverage:
+        return None, None, (f'only {len(keep)}/{len(qids)} ({coverage:.1%}) CCS '
+                            f'test items found in zero-shot -- below '
+                            f'{min_coverage:.0%}, refusing')
+
+    keep, rows = np.asarray(keep, dtype=int), np.asarray(rows, dtype=int)
+    if labels is not None:
+        joined = zs['labels'][rows]
+        bad = int((joined != np.asarray(labels)[keep]).sum())
+        if bad:
+            return None, None, (f'label mismatch on {bad}/{len(rows)} joined rows '
+                                '-- the two artefacts disagree about the data')
+    note = '' if coverage == 1.0 else f' ({len(qids) - len(keep)} items dropped)'
+    return keep, rows, f'joined on question_id{note}'
 
 
 # ============================================================================
@@ -39,6 +88,12 @@ def main():
     ap.add_argument('results_json')
     ap.add_argument('--zeroshot-dir', default='./zeroshot')
     ap.add_argument('--split', default='ungrouped', choices=['ungrouped', 'grouped'])
+    ap.add_argument('--tag', default='',
+                    help="zero-shot variant suffix, e.g. '_noinstr' for the "
+                         'prompt-matched run written by run_zeroshot.sh')
+    ap.add_argument('--min-coverage', type=float, default=0.9,
+                    help='refuse a run if fewer than this fraction of its CCS '
+                         'test items are present in the zero-shot artefact')
     args = ap.parse_args()
 
     res = json.loads(Path(args.results_json).read_text())
@@ -50,37 +105,42 @@ def main():
     for cell, c in res.get('cells', {}).items():
         # cell keys look like 'qwen2/object_detection' (see reanalysis.main)
         model_tag, category = cell.split('/', 1)
-        zs = load_zeroshot(args.zeroshot_dir, model_tag, category)
+        zs = load_zeroshot(args.zeroshot_dir, model_tag, category, args.tag)
         if zs is None:
-            print(f'[skip] no zero-shot file for {cell}')
+            print(f'[skip] no zero-shot file for {cell} (tag={args.tag!r})')
             continue
 
         for run, v in c.get('runs', {}).items():
             # run keys look like 'ungrouped/seed42'; keep only the requested split kind
             if not run.startswith(args.split + '/'):
                 continue
-            # test_idx = cache row numbers of the test set; ccs_test_pred = ORIENTED 0/1
-            # predictions for exactly those rows (both stored by reanalysis.run_cell)
-            te = v.get('test_idx')
+            # ccs_test_pred = ORIENTED 0/1 predictions for the test rows;
+            # test_question_ids names those rows (reanalysis.run_cell)
             pred = v.get('ccs_test_pred')
-            if te is None or pred is None:
+            if pred is None:
                 print(f'[skip] {cell} {run}: no per-item predictions')
                 continue
 
-            te = np.asarray(te)
-            ccs = np.asarray(pred)
-            # zero-shot rows follow build_pairs order minus missing images, like the
-            # cache does; if the largest test index does not exist there the files were
-            # made from different data (e.g. zero_shot.py ran with --limit)
-            if te.max() >= len(zs['labels']):
-                print(f'[skip] {cell} {run}: test_idx out of range for zero-shot rows')
+            keep, zs_rows, status = join_on_question_id(
+                zs, v.get('test_question_ids'), v.get('test_labels'),
+                args.min_coverage)
+            if keep is None:
+                print(f'[skip] {cell} {run}: {status}')
                 continue
 
+            ccs = np.asarray(pred)
+            if len(ccs) != len(v.get('test_question_ids', [])):
+                print(f'[skip] {cell} {run}: {len(ccs)} predictions for '
+                      f'{len(v.get("test_question_ids", []))} test items')
+                continue
+            ccs = ccs[keep]
+
             # restrict zero-shot to the SAME test rows CCS was scored on
-            y = zs['labels'][te]
-            m = zs['margin'][te]
-            # calibrated zero-shot prediction: top half of THESE test rows by margin -> yes.
-            # Calibrating on the subset (not on all items) keeps the 50/50 rate exact here.
+            y = zs['labels'][zs_rows]
+            m = zs['margin'][zs_rows]
+            # calibrated zero-shot: top half of THESE test rows by margin ->
+            # yes. Calibrating on the subset keeps the 50/50 rate exact and
+            # avoids using items CCS never saw.
             zsp = calibrate(m)
 
             # boolean masks: which items each method got right

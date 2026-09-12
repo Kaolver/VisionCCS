@@ -391,12 +391,34 @@ def train_supervised_classifier(neg_hs, pos_hs, y, config):
     print(f"  Test:  {len(y_test)} samples ({n_test_pos} pos, {n_test_neg} neg)")
     print(f"  Hidden dim: {x_train.shape[1]}")
     
-    lr = LogisticRegression(class_weight="balanced")
+    # FIXED: was `LogisticRegression(class_weight="balanced")` -- sklearn
+    # defaults (C=1.0, max_iter=100) on ~3.5k features with a few hundred rows,
+    # which neither converges nor regularises. The report treats this number as
+    # the ceiling, so a broken baseline is what makes CCS appear to beat it.
+    # C is now chosen on a held-out slice of TRAIN and convergence is reported.
+    rng = np.random.default_rng(config.get('random_seed', 42))
+    perm = rng.permutation(len(x_train))
+    cut = int(round(0.8 * len(x_train)))
+    fit_i, val_i = perm[:cut], perm[cut:]
+
+    best = (-1.0, 1.0)
+    for C in (0.001, 0.01, 0.1, 1.0, 10.0):
+        m = LogisticRegression(class_weight="balanced", max_iter=1000, C=C)
+        m.fit(x_train[fit_i], y_train[fit_i])
+        s = m.score(x_train[val_i], y_train[val_i])
+        if s > best[0]:
+            best = (s, C)
+    val_acc, C = best
+
+    lr = LogisticRegression(class_weight="balanced", max_iter=1000, C=C)
     lr.fit(x_train, y_train)
-    
+
+    n_iter = int(np.max(lr.n_iter_))
     test_acc = lr.score(x_test, y_test)
-    print("\nLogistic regression accuracy: {:.1%}".format(test_acc))
-    
+    print(f"\nSelected C={C} (held-out train accuracy {val_acc:.1%})")
+    print(f"Converged: {n_iter < 1000} after {n_iter} iterations")
+    print("Logistic regression accuracy: {:.1%}".format(test_acc))
+
     return test_acc, lr
 
 

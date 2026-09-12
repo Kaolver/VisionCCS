@@ -62,17 +62,26 @@ def test_alignment():
     pairs = R.build_pairs(VQA, 'object_detection', 'ccs')
     lab = np.array([p['label'] for p in pairs])
 
-    ids, st = R.align_pairs(pairs, lab)
-    check('align exact', st == 'exact' and len(ids) == len(lab))
+    kept, st = R.align_pairs(pairs, lab)
+    check('align exact', st == 'exact' and len(kept) == len(lab))
 
-    ids, st = R.align_pairs(pairs, lab[:500])
-    check('align prefix', st == 'prefix' and len(ids) == 500)
+    kept, st = R.align_pairs(pairs, lab[:500])
+    check('align prefix', st == 'prefix' and len(kept) == 500)
 
     # flip one label so the checksum comparison must reject the alignment
     bad = lab[:500].copy()
     bad[0] = 1 - bad[0]
-    ids, st = R.align_pairs(pairs, bad)
-    check('align mismatch rejection', ids is None and st.startswith('MISMATCH'), st)
+    kept, st = R.align_pairs(pairs, bad)
+    check('align mismatch rejection', kept is None and st.startswith('MISMATCH'), st)
+
+    kept, _ = R.align_pairs(pairs, lab)
+    qids = R.pairs_field(kept, 'question_id')
+    iids = R.pairs_field(kept, 'image_id')
+    check('pairs_field returns both join keys',
+          len(qids) == len(lab) and len(iids) == len(lab))
+    check('question_ids are unique (usable as a join key)',
+          len(set(int(q) for q in qids)) == len(qids))
+    check('pairs_field(None) -> None', R.pairs_field(None, 'question_id') is None)
 
 
 def test_auroc():
@@ -121,6 +130,239 @@ def test_normalize():
           np.abs(a.std(axis=0) - ptr.std(axis=0)).max() < 1e-5)
     check('var_normalize=False is pure centering',
           np.abs(a - (ptr - ptr.mean(axis=0, keepdims=True))).max() == 0.0)
+
+
+def test_cluster_norm():
+    rng = np.random.default_rng(0)
+    # Two clusters separated by a large offset: the distracting feature.
+    d = 12
+    off = np.zeros(d, dtype='f4'); off[0] = 50.0
+    def make(n):
+        g = rng.integers(0, 2, n)
+        base = rng.normal(0, 1, (n, d)).astype('f4')
+        return (base + np.outer(g, off)).astype('f4')
+    ptr, ntr, pte, nte = make(200), make(200), make(80), make(80)
+
+    a, b, c, e = R.cluster_normalize(ptr, ntr, pte, nte, 2, True, seed=0)
+    check('cluster_normalize preserves shapes',
+          a.shape == ptr.shape and c.shape == pte.shape)
+    check('cluster_normalize suppresses the between-cluster offset',
+          a[:, 0].std() < 2.0, f'std={a[:, 0].std():.3f} (raw {ptr[:, 0].std():.1f})')
+
+    a2, _, _, _ = R.cluster_normalize(ptr, ntr, pte + 1000.0, nte, 2, True, seed=0)
+    check('cluster_normalize is fit on train only',
+          np.abs(a - a2).max() == 0.0)
+
+    single, _, _, _ = R.cluster_normalize(ptr, ntr, pte, nte, 1, True, seed=0)
+    plain = R.normalize(ptr, ntr, pte, nte, 'train_stats', True)[0]
+    check('cluster k=1 reduces to train_stats normalization',
+          np.abs(single - plain).max() < 1e-4,
+          f'max diff {np.abs(single - plain).max():.2e}')
+
+    check('normalize dispatches cluster scheme',
+          R.normalize(ptr, ntr, pte, nte, 'cluster', True, cluster_k=2)[0].shape == ptr.shape)
+
+
+def test_kmeans():
+    rng = np.random.default_rng(1)
+    X = np.vstack([rng.normal(-8, 0.3, (60, 4)), rng.normal(8, 0.3, (60, 4))]).astype('f4')
+    C, a = R._kmeans(X, 2, seed=0)
+    check('kmeans separates two clean clusters',
+          len(set(a[:60])) == 1 and len(set(a[60:])) == 1 and a[0] != a[60])
+    check('kmeans deterministic from seed', np.array_equal(R._kmeans(X, 2, seed=0)[1], a))
+    check('kmeans k>n is clamped', len(R._kmeans(X[:3], 10, seed=0)[0]) == 3)
+
+
+def test_baselines():
+    """A planted signal every baseline must find, and a null it must not."""
+    rng = np.random.default_rng(2)
+    n, d = 400, 30
+    w = rng.normal(size=d); w /= np.linalg.norm(w)
+
+    def synth(n):
+        y = rng.integers(0, 2, n)
+        noise_p = rng.normal(0, 1, (n, d))
+        noise_n = rng.normal(0, 1, (n, d))
+        delta = np.outer(2.0 * (y - 0.5), w) * 3.0
+        return ((noise_p + delta / 2).astype('f4'),
+                (noise_n - delta / 2).astype('f4'), y)
+
+    ptr, ntr, ytr = synth(n)
+    pte, nte, yte = synth(200)
+
+    for name, fn in (('crc_tpc', R.train_pca_tpc), ('kmeans_diff', R.train_kmeans_diff)):
+        s, _ = fn(ptr, ntr, pte, nte, seed=0)
+        acc = R.score_report(s, yte)['flipped_acc']
+        check(f'{name} recovers a planted direction', acc > 0.9, f'{acc:.1%}')
+
+    s, _ = R.train_mean_diff(ptr, ntr, pte, nte, ytr, seed=0)
+    check('mean_diff (supervised) recovers it too',
+          R.score_report(s, yte)['flipped_acc'] > 0.9)
+
+    # Null: no planted signal, so everything must sit near chance.
+    q = [rng.normal(size=(n, d)).astype('f4') for _ in range(2)]
+    r = [rng.normal(size=(200, d)).astype('f4') for _ in range(2)]
+    ynull = rng.integers(0, 2, 200)
+    for name, fn in (('crc_tpc', R.train_pca_tpc), ('kmeans_diff', R.train_kmeans_diff),
+                     ('random_dir', R.train_random_dir)):
+        s, _ = fn(q[0], q[1], r[0], r[1], seed=0)
+        acc = R.score_report(s, ynull)['flipped_acc']
+        check(f'{name} stays near chance on noise', acc < 0.62, f'{acc:.1%}')
+
+    s, _ = R.train_random_dir(ptr, ntr, pte, nte, seed=0)
+    check('random_dir returns scores in [0,1]', s.min() >= 0.0 and s.max() <= 1.0)
+
+    s, m = R.train_mean_diff(ptr, ntr, pte, nte, np.ones(n, dtype=int), seed=0)
+    check('mean_diff flags a single-class train set instead of dividing by zero',
+          m.get('degenerate') is True)
+
+
+def test_derange():
+    from extract import _derange
+    rng = np.random.default_rng(3)
+
+    items = [int(v) for v in rng.integers(0, 50, 300)]
+    perm = _derange(items, 7)
+    check('derange is a permutation',
+          sorted(perm.tolist()) == list(range(len(items))))
+    fixed = sum(1 for i, j in enumerate(perm) if items[j] == items[i])
+    check('derange leaves no item paired with its own image', fixed == 0, f'{fixed} fixed')
+    check('derange deterministic from seed',
+          np.array_equal(_derange(items, 7), perm))
+
+    # Duplicated values must still yield a valid permutation.
+    dupes = [0, 0, 0, 1, 1, 2, 3, 4, 5, 6]
+    p2 = _derange(dupes, 1)
+    check('derange handles duplicate values without collapsing',
+          sorted(p2.tolist()) == list(range(len(dupes))))
+    check('derange breaks all pairings when values allow',
+          all(dupes[p2[i]] != dupes[i] for i in range(len(dupes))))
+
+    # A majority value cannot be fully deranged; must not loop forever.
+    heavy = [9] * 8 + [1, 2]
+    p3 = _derange(heavy, 2)
+    check('derange survives an undernageable majority value',
+          sorted(p3.tolist()) == list(range(len(heavy))))
+
+
+def test_banner_distractor():
+    from PIL import Image
+    from extract import add_banner, DISTRACTOR_WORDS
+    from layer_sweep import find_cache_v3
+
+    src = Image.new('RGB', (600, 400), (90, 120, 160))
+    outs = [add_banner(src, w) for w in DISTRACTOR_WORDS]
+    check('banner preserves image size', all(o.size == src.size for o in outs))
+    check('banner actually modifies the image',
+          all(o.tobytes() != src.tobytes() for o in outs))
+    check('TRUE and FALSE banners are visually distinct',
+          outs[0].tobytes() != outs[1].tobytes())
+    check('banner survives a tiny image',
+          add_banner(Image.new('RGB', (48, 32)), 'FALSE').size == (48, 32))
+
+    # Writer and reader must agree on the suffix.
+    with tempfile.TemporaryDirectory() as td:
+        t = pathlib.Path(td)
+        (t / 'hs_qwen2_object_detection_distract-banner.npz').touch()
+        (t / 'hs_qwen2_object_detection_shuffled_distract-banner_tplain-qa.npz').touch()
+        check('find_cache_v3 resolves the distractor suffix',
+              find_cache_v3(t, 'qwen2', 'object_detection',
+                            distractor='banner') is not None)
+        check('find_cache_v3 composes shuffled + distractor + templates',
+              find_cache_v3(t, 'qwen2', 'object_detection', shuffled=True,
+                            templates=['plain', 'qa'], distractor='banner')
+              is not None)
+        check('find_cache_v3 does not match a plain cache when banner is asked',
+              find_cache_v3(t, 'qwen2', 'object_detection') is None)
+
+
+def test_prompts():
+    import prompts as PR
+    for name in PR.ALL_TEMPLATES:
+        pos = PR.render(name, 'Is there a dog?', True)
+        neg = PR.render(name, 'Is there a dog?', False)
+        pw, nw = PR.answer_words(name)
+        check(f'template {name}: pos/neg differ only in the answer word',
+              pos[:-len(pw)] == neg[:-len(nw)] and pos.endswith(pw) and neg.endswith(nw),
+              repr(pos))
+        prefix = PR.zeroshot_prefix(name, 'Is there a dog?')
+        check(f'template {name}: zero-shot prefix is the CCS prompt truncated',
+              pos.startswith(prefix) and pw not in prefix, repr(prefix))
+        check(f'template {name}: question mark not doubled', '??' not in pos, repr(pos))
+
+    check('template_names default', PR.template_names(None) == ['plain'])
+    check('template_names all', PR.template_names(['all']) == PR.ALL_TEMPLATES)
+    try:
+        PR.template_names(['nope'])
+        check('template_names rejects unknown names', False)
+    except ValueError:
+        check('template_names rejects unknown names', True)
+
+
+def test_zeroshot_join():
+    from compare_zeroshot import join_on_question_id
+    zs = {'question_ids': np.array([10, 11, 12, 13]),
+          'labels': np.array([1, 0, 1, 0]),
+          'margin': np.array([0.5, -0.5, 0.2, -0.2])}
+
+    keep, rows, st = join_on_question_id(zs, [12, 10], [1, 1])
+    check('join maps question_ids to rows regardless of order',
+          rows is not None and list(rows) == [2, 0] and list(keep) == [0, 1], st)
+
+    keep, rows, st = join_on_question_id(zs, [12, 99, 10], [1, 1, 1],
+                                         min_coverage=0.5)
+    check('join drops unmatched items and reports coverage',
+          list(keep) == [0, 2] and list(rows) == [2, 0] and 'dropped' in st, st)
+
+    keep, rows, st = join_on_question_id(zs, [12, 99], [1, 1], min_coverage=0.9)
+    check('join refuses when coverage falls below the threshold',
+          keep is None and 'refusing' in st, st)
+
+    # Same length, same range, different items -- what a positional join misses.
+    keep, rows, st = join_on_question_id(zs, [10, 11], [1, 1])
+    check('join refuses on a label mismatch instead of reporting a number',
+          keep is None and 'label mismatch' in st, st)
+
+    # Labels indexed by `keep`: a dropped item must not cause a false alarm.
+    keep, rows, st = join_on_question_id(zs, [10, 99, 11], [1, 0, 0],
+                                         min_coverage=0.5)
+    check('label cross-check aligns with the kept subset',
+          keep is not None and list(keep) == [0, 2], st)
+
+    keep, rows, st = join_on_question_id({**zs, 'question_ids': None}, [10], [1])
+    check('join refuses on a pre-question_id zero-shot file',
+          keep is None and 'predates' in st, st)
+
+    keep, rows, st = join_on_question_id(zs, None, None)
+    check('join refuses when results JSON has no test_question_ids',
+          keep is None and 'test_question_ids' in st, st)
+
+
+def test_pope_converter():
+    from pope_to_vqa import convert, read_records
+    recs = [{'question_id': 1, 'image': 'COCO_val2014_000000310196.jpg',
+             'text': 'Is there a snowboard in the image?', 'label': 'yes'},
+            {'question_id': 2, 'image': 'COCO_val2014_000000310196.jpg',
+             'text': 'Is there a fork in the image?', 'label': 'no'},
+            {'question_id': 3, 'image': 'x.jpg', 'text': '', 'label': 'yes'}]
+    items, dropped = convert(recs, 'pope_random')
+    check('pope converter keeps well-formed rows', len(items) == 2 and dropped == 1)
+    check('pope converter emits the build_pairs schema',
+          set(items[0]) >= {'question_id', 'image_id', 'question', 'answer'})
+    check('pope image_id stays a filename string (find_image needs it literal)',
+          items[0]['image_id'] == 'COCO_val2014_000000310196.jpg')
+
+    pop, _ = convert(recs[:2], 'pope_popular')
+    check('pope question_ids are namespaced per split',
+          set(i['question_id'] for i in items).isdisjoint(
+              i['question_id'] for i in pop))
+
+    with tempfile.TemporaryDirectory() as td:
+        p = pathlib.Path(td) / 'a.json'
+        p.write_text('\n'.join(json.dumps(r) for r in recs[:2]))
+        check('pope reader accepts JSON Lines', len(read_records(p)) == 2)
+        p.write_text(json.dumps(recs[:2]))
+        check('pope reader accepts a JSON list', len(read_records(p)) == 2)
 
 
 def test_find_cache():
@@ -213,9 +455,11 @@ def test_locate_positions():
 
 if __name__ == '__main__':
     for fn in (test_pair_reconstruction, test_alignment, test_auroc, test_splits,
-               test_normalize, test_find_cache, test_score_report,
+               test_normalize, test_cluster_norm, test_kmeans, test_baselines,
+               test_find_cache, test_score_report,
                test_pca_control, test_gaussian_control, test_diagnostics,
-               test_locate_positions):
+               test_locate_positions, test_derange, test_banner_distractor, test_prompts,
+               test_zeroshot_join, test_pope_converter):
         print(f'\n-- {fn.__name__} --')
         fn()
     print('\n' + ('ALL PASS' if _ok else 'FAILURES PRESENT'))

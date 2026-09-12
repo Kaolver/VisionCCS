@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 
 from reanalysis import build_pairs, CATEGORIES
+import prompts as P
 
 MODEL_PATHS = {
     'qwen2': 'Qwen/Qwen2-VL-7B-Instruct',
@@ -127,6 +128,69 @@ def find_image(image_id, image_dirs):
     return None
 
 
+DISTRACTOR_WORDS = ('TRUE', 'FALSE')
+
+
+def add_banner(image, word, seed=0):
+    """Overlay a high-contrast text banner.
+
+    PIL's built-in bitmap font, upscaled, so no TrueType file is needed.
+    """
+    from PIL import Image, ImageDraw
+    img = image.convert('RGB').copy()
+    W, H = img.size
+    scale = max(2, W // 120)
+
+    tile = Image.new('RGB', (len(word) * 6 + 4, 11), (0, 0, 0))
+    ImageDraw.Draw(tile).text((2, 1), word, fill=(255, 255, 255))
+    tile = tile.resize((tile.width * scale, tile.height * scale), Image.NEAREST)
+    if tile.width > W:
+        tile = tile.resize((W, int(tile.height * W / tile.width)), Image.NEAREST)
+    img.paste(tile, (max(0, (W - tile.width) // 2), max(0, H // 20)))
+    return img
+
+
+def _derange(items, seed):
+    """A permutation with no fixed point in VALUE space, as far as possible.
+
+    Returns perm with items[perm[i]] != items[i] wherever achievable. Grouping
+    by value and rotating by the largest block size is fixed-point-free by
+    construction; the swap pass repairs blocks that wrapped onto themselves. A
+    value holding more than half the data cannot be fully deranged, and the
+    caller reports those residual fixed points.
+    """
+    rng = np.random.default_rng(seed)
+    n = len(items)
+    if n < 2:
+        return np.arange(n)
+
+    order = rng.permutation(n)
+    by_value = {}
+    for i in order:
+        by_value.setdefault(items[i], []).append(int(i))
+    blocks = sorted(by_value.values(), key=len, reverse=True)
+    flat = [i for b in blocks for i in b]
+    shift = max(len(b) for b in blocks)
+    perm = np.array([flat[(k + shift) % n] for k in range(n)], dtype=int)
+
+    # Repair residual collisions by swapping with a position safe for both.
+    for k in range(n):
+        if items[perm[k]] != items[flat[k]]:
+            continue
+        for j in range(n):
+            if (items[perm[j]] != items[flat[k]]
+                    and items[perm[k]] != items[flat[j]]):
+                perm[k], perm[j] = perm[j], perm[k]
+                break
+
+    # perm is indexed by position in `flat`; map back to original positions.
+    out = np.empty(n, dtype=int)
+    for k, idx in enumerate(flat):
+        out[idx] = perm[k]
+    return out
+
+
+
 # ============================================================================
 # NOTE (review): one forward pass, then hidden_states[l][0, positions, :] for
 # every requested layer; returned as float16 to keep caches small.
@@ -172,17 +236,28 @@ def main():
                     help='keep every Nth layer (1 = all). Controls cache size.')
     ap.add_argument('--positions', nargs='+', default=['answer', 'final'],
                     choices=['answer', 'eot', 'final'])
+    ap.add_argument('--templates', nargs='+', default=['plain'],
+                    help=f'surface forms for the contrast pairs; "all" expands to '
+                         f'{P.ALL_TEMPLATES}. See prompts.py.')
     ap.add_argument('--shuffle-images', action='store_true',
                     help='control: permute image<->question pairing within category')
     ap.add_argument('--shuffle-seed', type=int, default=1234)
+    ap.add_argument('--distractor', default='none', choices=['none', 'banner'],
+                    help='control (Farquhar et al. 2312.10029): stamp a TRUE/FALSE '
+                         'banner assigned independently of the answer. CCS is then '
+                         'scored against the banner too; above chance means it '
+                         'found the prominent feature, not knowledge.')
+    ap.add_argument('--distractor-seed', type=int, default=99)
     ap.add_argument('--limit', type=int, default=None, help='smoke test')
     args = ap.parse_args()
 
     import torch
     from PIL import Image
 
+    templates = P.template_names(args.templates)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'device={device}  model={args.model}  shuffle_images={args.shuffle_images}')
+    print(f'templates: {templates}')
     model, proc = load_model(args.model, device)
     tok = proc.tokenizer
     eot_id = end_of_turn_id(args.model, tok)
@@ -209,22 +284,33 @@ def main():
             pairs = pairs[:args.limit]
 
         if args.shuffle_images:
-            # control: give each question a DIFFERENT image of the same category. perm[i]
-            # is the source item whose image question i receives
-            rng = np.random.default_rng(args.shuffle_seed)
+            # control: give each question a DIFFERENT image of the same
+            # category. perm[i] is the source item whose image question i
+            # receives. _derange returns a TRUE permutation, so each image
+            # is still used exactly as often as before.
             imgs = [p['image_id'] for p in pairs]
-            perm = rng.permutation(len(imgs))
-            for i, j in enumerate(perm):
-                # if item i would get its own image back, take the next slot's instead.
-                # (This copies an index, so perm stops being a permutation: one image is then
-                # used twice and another not at all. Acceptable for a control.)
-                if imgs[j] == imgs[i]:
-                    perm[i] = perm[(i + 1) % len(perm)]
+            perm = _derange(imgs, args.shuffle_seed)
             pairs = [{**p, 'image_id': imgs[perm[i]]} for i, p in enumerate(pairs)]
+            n_fixed = sum(1 for i in range(len(imgs)) if imgs[perm[i]] == imgs[i])
+            print(f'  shuffled-image control: {len(imgs)} questions repaired to a '
+                  f'different image, {n_fixed} unavoidable fixed points '
+                  f'({n_fixed / max(len(imgs), 1):.2%})')
 
-        # P/N: per-item (layers, positions, d) arrays for the Yes / No statement;
-        # y: label; iid/qid: ids stored so later splits can group by image
-        P, N, y, iid, qid, failures, pos_log = [], [], [], [], [], [], None
+        # One ROW per (item, template), not an extra array axis, so templates can
+        # be added later without rewriting caches and subset at load time. qid
+        # keeps an item's sibling rows joinable for the grouped split.
+        Ps, Ns, y, iid, qid, tid, did = [], [], [], [], [], [], []
+        failures, pos_log = [], {}
+
+        # Fair coin per item, independent of the label: the banner carries zero
+        # information about truth, so scoring above chance against it is a tell.
+        drng = np.random.default_rng(args.distractor_seed)
+        dlab_all = (drng.integers(0, 2, len(pairs)) if args.distractor != 'none'
+                    else np.zeros(len(pairs), dtype=int))
+
+        # Ps/Ns: per-row (layers, positions, d) arrays for the Yes / No
+        # statement; y: label; iid/qid/tid: ids stored so later splits can
+        # group by image or question and select templates.
         for i, p in enumerate(pairs):
             path = find_image(p['image_id'], args.image_dirs)
             if path is None:
@@ -232,58 +318,80 @@ def main():
                 continue
             try:
                 image = Image.open(path).convert('RGB')
-                q = p['question'].rstrip('?')
-                # the two contrast statements, same image, same prompt shape as vision_ccs.py
-                ph, idx = extract_one(model, proc, args.model, image, f'{q}? Yes',
-                                      layers, args.positions, eot_id)
-                nh, _ = extract_one(model, proc, args.model, image, f'{q}? No',
-                                    layers, args.positions, eot_id)
-                # print the position map once so the log shows which indices were pooled
-                if pos_log is None:
-                    pos_log = idx
-                    print(f'  first item position map: {idx}')
-                P.append(ph); N.append(nh); y.append(p['label'])
-                iid.append(p['image_id']); qid.append(p['question_id'])
+                    # the two contrast statements: same image, same prompt
+                    # shape as vision_ccs.py, rendered from prompts.py
+                if args.distractor == 'banner':
+                    image = add_banner(image, DISTRACTOR_WORDS[dlab_all[i]])
+                for t in templates:
+                    ph, idx = extract_one(
+                        model, proc, args.model, image,
+                        P.render(t, p['question'], True),
+                        layers, args.positions, eot_id)
+                    nh, _ = extract_one(
+                        model, proc, args.model, image,
+                        P.render(t, p['question'], False),
+                        layers, args.positions, eot_id)
+                    if t not in pos_log:
+                        pos_log[t] = idx
+                        print(f'  template {t!r} position map: {idx}   '
+                              f'example: {P.render(t, p["question"], True)!r}')
+                    Ps.append(ph); Ns.append(nh); y.append(p['label'])
+                    iid.append(p['image_id']); qid.append(p['question_id'])
+                    tid.append(t); did.append(int(dlab_all[i]))
             except Exception as e:
                 failures.append((p['question_id'], f'{type(e).__name__}: {e}'))
             if device == 'cuda' and i % 100 == 0:
                 torch.cuda.empty_cache()
             if i % 500 == 0:
-                print(f'  {category}: {i}/{len(pairs)}  kept={len(P)}  failed={len(failures)}')
+                print(f'  {category}: {i}/{len(pairs)}  kept={len(Ps)}  failed={len(failures)}')
 
-        if not P:
+        if not Ps:
             print(f'{category}: nothing extracted'); continue
         gc.collect()
 
         suffix = '_shuffled' if args.shuffle_images else ''
-        # np.stack(P) -> (n, layers, positions, d). layers/positions arrays are saved
-        # alongside so layer_sweep can map indices back to layer numbers / names
+        if args.distractor != 'none':
+            suffix += f'_distract-{args.distractor}'
+        if templates != ['plain']:
+            suffix += '_t' + '-'.join(templates)
         f = out_dir / f'hs_{args.model}_{category}{suffix}.npz'
+        # np.stack(Ps) -> (n rows, layers, positions, d). layers/positions arrays
+        # are saved alongside so layer_sweep can map indices back to layer
+        # numbers / position names.
         np.savez(f,
-                 pos_hiddens=np.stack(P), neg_hiddens=np.stack(N),
+                 pos_hiddens=np.stack(Ps), neg_hiddens=np.stack(Ns),
                  labels=np.array(y), layers=np.array(layers),
                  positions=np.array(args.positions),
-                 image_ids=np.array(iid), question_ids=np.array(qid))
-        shape = np.stack(P).shape
+                 image_ids=np.array(iid), question_ids=np.array(qid),
+                 template_ids=np.array(tid), templates=np.array(templates),
+                 distractor_labels=np.array(did),
+                 distractor=np.array(args.distractor))
+        shape = np.stack(Ps).shape
         print(f'\n{category}: wrote {f}')
-        print(f'  shape {shape} (n, layers, positions, d)  '
+        print(f'  shape {shape} (n_rows, layers, positions, d)  '
               f'{f.stat().st_size / 1e9:.2f} GB')
-        print(f'  kept {len(P)}/{len(pairs)}   failed {len(failures)}')
-        # tally failures by exception class (text before the first ':')
+        print(f'  kept {len(Ps)} rows from {len(set(qid))}/{len(pairs)} items '
+              f'x {len(templates)} templates   failed {len(failures)}')
         by_reason = {}
         for _, why in failures:
             by_reason[why.split(':')[0]] = by_reason.get(why.split(':')[0], 0) + 1
         if by_reason:
             print(f'  failure breakdown: {by_reason}')
         manifest[category] = {'file': str(f), 'shape': list(shape),
-                              'kept': len(P), 'failed': len(failures),
+                              'rows': len(Ps), 'items': len(set(qid)),
+                              'templates': templates,
+                              'failed': len(failures),
                               'failure_reasons': by_reason,
                               'positions_example': pos_log,
                               'yes_frac': float(np.mean(y))}
 
-    mf = out_dir / f'manifest_{args.model}{"_shuffled" if args.shuffle_images else ""}.json'
+    tag = '_shuffled' if args.shuffle_images else ''
+    if templates != ['plain']:
+        tag += '_t' + '-'.join(templates)
+    mf = out_dir / f'manifest_{args.model}{tag}.json'
     mf.write_text(json.dumps({'model': args.model, 'layers': layers,
                               'positions': args.positions,
+                              'templates': templates,
                               'shuffled': args.shuffle_images,
                               'categories': manifest}, indent=2))
     print(f'\nWrote {mf}')

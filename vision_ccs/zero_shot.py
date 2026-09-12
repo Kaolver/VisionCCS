@@ -5,8 +5,10 @@
 # Zero-shot Yes/No baseline (Burns et al. Sec 3.1 '0-shot' / 'calibrated'),
 # which vision_ccs.py does not have. It scores the model's own next-token
 # logits for Yes vs No at the generation position. Output zeroshot_<model>_
-# <cat>.npz is row-aligned with reanalysis.build_pairs(mode='ccs') minus the
-# same missing-image skips, which is what compare_zeroshot.py relies on.
+# <cat>.npz follows reanalysis.build_pairs(mode='ccs') minus this run's own
+# missing-image skips -- which need NOT match the extractor's, so the npz also
+# stores question_ids and compare_zeroshot.py joins on those rather than on row
+# position.
 # ============================================================================
 import argparse
 import gc
@@ -17,6 +19,7 @@ from pathlib import Path
 import numpy as np
 
 from reanalysis import build_pairs, CATEGORIES
+import prompts as P
 
 # several surface forms because tokenizers distinguish 'Yes' from ' Yes' (leading
 # space) and casing; each form may start with a different token id
@@ -35,6 +38,21 @@ def _first_token_ids(tokenizer, forms):
             ids.append(enc[0])
     # deduplicate: ' Yes' and 'Yes' may map to the same first id in some tokenizers
     return sorted(set(ids))
+
+
+def answer_token_forms(template):
+    """Surface forms to score for this template's answer words.
+
+    Case and leading-space variants are all scored and maxed, so tokenizer
+    quirks don't decide the baseline.
+    """
+    pos_word, neg_word = P.answer_words(template)
+
+    def forms(w):
+        return [w, ' ' + w, w.lower(), ' ' + w.lower(),
+                w.capitalize(), ' ' + w.capitalize()]
+
+    return forms(pos_word), forms(neg_word)
 
 
 def find_image(image_id, image_dirs):
@@ -77,17 +95,17 @@ def load_model(model_tag, cfg_paths, device):
 
 # ============================================================================
 # NOTE POTENTIAL MISMATCH (by design): this prompt ENDS with the generation
-# prompt ('\nASSISTANT:' / add_generation_prompt=True) so the model answers,
+# prompt (ASSISTANT: / add_generation_prompt=True) so the model answers,
 # whereas CCS extraction ends with the statement + EOS. --no-instruction drops
 # the extra 'Answer yes or no.' hint that CCS never sees.
+# The question body is prompts.zeroshot_prefix(template, ...) -- the same format
+# string extract.py renders, truncated before the answer word -- so that half of
+# the parity is mechanical rather than asserted.
 # ============================================================================
-def build_inputs(model_tag, proc, image, question, instruction=True):
-    """Build input prompt stopping before the answer with generation prompt on."""
-    # normalise punctuation: exactly one trailing '?' whatever the dataset had
-    q = question.rstrip('?') + '?'
-    # CCS extraction sees a bare statement ("Is there a dog? Yes"). Giving
-    # zero-shot an extra "Answer yes or no." task hint that CCS never gets is an
-    # asymmetry favouring zero-shot, so it is switchable and both are reported.
+def build_inputs(model_tag, proc, image, question, instruction=True,
+                 template='plain'):
+    """Build input prompt stopping before the answer, generation prompt on."""
+    q = P.zeroshot_prefix(template, question)
     # optional task hint; CCS extraction never sees it, hence the --no-instruction
     # switch so both variants can be reported
     if instruction:
@@ -148,7 +166,9 @@ def calibrated_accuracy(margin, labels):
 # ============================================================================
 # NOTE (review): per item, yes_logit = max over first-token ids of the YES
 # surface forms, no_logit likewise; raw accuracy thresholds margin > 0,
-# calibrated accuracy uses calibrate(). Skipped items are NOT recorded by id.
+# calibrated accuracy uses calibrate(). Kept items ARE recorded by question_id;
+# skipped ones are simply absent, which is what lets the downstream join detect
+# a coverage gap instead of silently misaligning.
 # ============================================================================
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
@@ -164,6 +184,8 @@ def main():
                          'extraction sees (removes a hint zero-shot got and CCS did not)')
     ap.add_argument('--tag', default='',
                     help='suffix for output filenames, to keep variants separate')
+    ap.add_argument('--template', default='plain', choices=P.ALL_TEMPLATES,
+                    help='surface form to match against CCS extraction')
     ap.add_argument('--limit', type=int, default=None,
                     help='cap items per category (for a quick smoke test)')
     args = ap.parse_args()
@@ -179,9 +201,13 @@ def main():
 
     model, proc = load_model(args.model, paths, device)
     tok = proc.tokenizer
-    # token ids whose logits will be compared
-    yes_ids = _first_token_ids(tok, YES_FORMS)
-    no_ids = _first_token_ids(tok, NO_FORMS)
+    # token ids whose logits will be compared: the global forms plus whatever
+    # answer words this template actually uses
+    yes_forms, no_forms = answer_token_forms(args.template)
+    yes_ids = _first_token_ids(tok, sorted(set(YES_FORMS + yes_forms)))
+    no_ids = _first_token_ids(tok, sorted(set(NO_FORMS + no_forms)))
+    print(f'template {args.template!r} -> prefix example: '
+          f'{P.zeroshot_prefix(args.template, "Is there a dog")!r}')
     print(f'yes token ids {yes_ids} -> {tok.convert_ids_to_tokens(yes_ids)}')
     print(f'no  token ids {no_ids} -> {tok.convert_ids_to_tokens(no_ids)}')
     # sanity: both sets non-empty and disjoint, otherwise yes/no cannot be separated
@@ -195,7 +221,10 @@ def main():
         pairs = build_pairs(args.vqa_json, category, mode='ccs')
         if args.limit:
             pairs = pairs[:args.limit]
-        yl, nl, labels, skipped = [], [], [], 0
+        # question_ids are the join key compare_zeroshot.py uses; this loop and
+        # the extraction loop skip items independently, so positional alignment
+        # between the two artefacts is an assumption, not a fact.
+        yl, nl, labels, qids, iids, skipped = [], [], [], [], [], 0
 
         for i, p in enumerate(pairs):
             path = find_image(p['image_id'], args.image_dirs)
@@ -205,7 +234,8 @@ def main():
             try:
                 image = Image.open(path).convert('RGB')
                 inputs = build_inputs(args.model, proc, image, p['question'],
-                                      instruction=not args.no_instruction)
+                                      instruction=not args.no_instruction,
+                                      template=args.template)
                 inputs = {k: (v.to(device) if hasattr(v, 'to') else v)
                           for k, v in inputs.items()}
                 with torch.no_grad():
@@ -216,6 +246,8 @@ def main():
                 yl.append(float(logits[yes_ids].max()))
                 nl.append(float(logits[no_ids].max()))
                 labels.append(p['label'])
+                qids.append(p['question_id'])
+                iids.append(p['image_id'])
             except Exception as e:
                 print(f"  error on {p['image_id']}: {e}")
                 skipped += 1
@@ -240,11 +272,16 @@ def main():
         yes_rate = float((margin > 0).mean())
 
         f = out_dir / f'zeroshot_{args.model}{args.tag}_{category}.npz'
-        np.savez(f, yes_logit=yl, no_logit=nl, labels=labels)
+        np.savez(f, yes_logit=yl, no_logit=nl, labels=labels,
+                 question_ids=np.array(qids), image_ids=np.array(iids),
+                 template=np.array(args.template))
         summary[category] = {'n': int(len(labels)), 'skipped': int(skipped),
                              'raw_acc': raw, 'calibrated_acc': cal,
                              'median_margin': thr, 'predicted_yes_rate': yes_rate,
-                             'true_yes_rate': float(labels.mean()), 'file': str(f)}
+                             'true_yes_rate': float(labels.mean()),
+                             'template': args.template,
+                             'instruction': not args.no_instruction,
+                             'file': str(f)}
         print(f'\n{category}: n={len(labels)} skipped={skipped}')
         print(f'  raw acc        {raw:.1%}   (predicts yes {yes_rate:.1%} of the time)')
         print(f'  calibrated acc {cal:.1%}   (median margin {thr:+.3f})\n')

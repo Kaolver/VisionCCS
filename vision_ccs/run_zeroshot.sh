@@ -29,8 +29,22 @@ for MODEL in qwen2 llava; do
 
   echo ""
   echo "=== $MODEL : no instruction (prompt-matched to CCS) ==="
-  python zero_shot.py --model "$MODEL" --out-dir ./zeroshot       --no-instruction --tag _noinstr
+  python zero_shot.py --model "$MODEL" --out-dir ./zeroshot \
+      --no-instruction --tag _noinstr
 done
+
+# One run per template, so a multi-template CCS cache has a prompt-matched
+# baseline for every surface form. Prefixes come from prompts.zeroshot_prefix.
+if [ "${TEMPLATES:-}" = "all" ]; then
+  for MODEL in qwen2 llava; do
+    for T in qa qa_lower based_on correct; do
+      echo ""
+      echo "=== $MODEL : template $T (prompt-matched) ==="
+      python zero_shot.py --model "$MODEL" --out-dir ./zeroshot \
+          --no-instruction --template "$T" --tag "_noinstr_$T"
+    done
+  done
+fi
 
 echo ""
 echo "=== outputs ==="

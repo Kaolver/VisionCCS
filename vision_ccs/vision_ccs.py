@@ -174,10 +174,11 @@ def extract_in_batches(pairs, config, category):
 
     # ==========================================================================
     # CHANGED (CCS alignment): cache filename tag bumped ("_ccs_aligned").
-    # Hidden states are now pooled at the token right after the answer
-    # (+ EOS / end-of-turn) instead of after the generation prompt, so caches
-    # produced by the previous extraction code are incompatible and must not
-    # be reused.
+    # Hidden states are now pooled at the end of the user turn instead of after
+    # the generation prompt, so earlier caches are incompatible.
+    #
+    # This path stores the FINAL layer at ONE position; extract.py writes the
+    # richer cache new experiments should use. Kept for reproducibility.
     # ==========================================================================
     cache_file = cache_dir / f"cache_{category}_{n}_{model_tag}_ccs_aligned.npz"
     
@@ -421,9 +422,12 @@ def extract_one_qwen2(model, processor, image, text, device):
     # CHANGED (CCS alignment): add_generation_prompt is now False (was True).
     # Original CCS pools the last-token hidden state right after the statement
     # (+ EOS for decoder models); with the generation prompt, the pooled last
-    # token was the end of the assistant header instead of the answer. Now the
-    # templated text ends with the user turn ("... Yes<|im_end|>"), the chat-
-    # template equivalent of statement + EOS.
+    # token was the end of the assistant header instead of the answer.
+    #
+    # NOTE: Qwen's template appends a newline after <|im_end|>, so the pooled
+    # last token is that newline -- two positions past the answer, not directly
+    # after it. Left as-is because it produced the existing caches; the
+    # corrected positions live in extract.py:locate_positions.
     # ==========================================================================
     text_prompt = processor.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=False
@@ -476,9 +480,11 @@ def extract_one_qwen2_5(model, processor, image, text, device):
     # Prepare inputs using Qwen's format
     # ==========================================================================
     # CHANGED (CCS alignment): add_generation_prompt is now False (was True),
-    # same rationale as for the other models — the pooled last token now sits
-    # right after the answer (+ end-of-turn token), not after the assistant
-    # generation prompt.
+    # same rationale as for the other models — the pooled state is no longer
+    # taken after an assistant generation prompt.
+    #
+    # NOTE: as in extract_one_qwen2, the pooled last token is the newline Qwen
+    # appends after <|im_end|>, not the answer token.
     # ==========================================================================
     text_prompt = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
 
@@ -554,7 +560,9 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
     def normalize(x):
         x = x - x.mean(dim=0)
         if config['ccs_var_normalize']:
-            x = x / x.std(dim=0, unbiased=False)
+            # eps guards constant dimensions; without it a dead dim yields nan
+            # and poisons every gradient rather than failing.
+            x = x / (x.std(dim=0, unbiased=False) + 1e-8)
         return x
 
     pos_train = normalize(pos_train_raw)
@@ -748,10 +756,28 @@ def lr_sanity_check(pos_hiddens, neg_hiddens, labels, config):
     x_train, x_test = x[train_idx], x[test_idx]
     y_train, y_test = labels[train_idx], labels[test_idx]
 
-    lr = LogisticRegression(class_weight="balanced", max_iter=1000)
+    # C swept on a held-out slice of TRAIN, never the test set. At d=3584 with a
+    # few hundred rows the sklearn default C=1.0 badly overfits.
+    rng = np.random.default_rng(config['random_seed'])
+    perm = rng.permutation(len(x_train))
+    cut = int(round(0.8 * len(x_train)))
+    fit_i, val_i = perm[:cut], perm[cut:]
+
+    best = (-1.0, 1.0)
+    for C in (0.001, 0.01, 0.1, 1.0, 10.0):
+        m = LogisticRegression(class_weight="balanced", max_iter=1000, C=C)
+        m.fit(x_train[fit_i], y_train[fit_i])
+        s = m.score(x_train[val_i], y_train[val_i])
+        if s > best[0]:
+            best = (s, C)
+    val_acc, C = best
+
+    lr = LogisticRegression(class_weight="balanced", max_iter=1000, C=C)
     lr.fit(x_train, y_train)
     acc = lr.score(x_test, y_test)
-    print(f"\nLogistic regression sanity-check accuracy: {acc:.1%}")
+    n_iter = int(np.max(lr.n_iter_))
+    print(f"\nLogistic regression sanity-check accuracy: {acc:.1%} "
+          f"(C={C}, held-out train {val_acc:.1%}, converged={n_iter < 1000})")
     return acc
 
 
