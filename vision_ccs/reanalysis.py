@@ -1,5 +1,14 @@
 """Re-analysis of cached VisionCCS hidden states."""
 
+# ============================================================================
+# NOTE (review): ROLE OF THIS FILE
+# Re-analysis harness. It never loads a vision-language model: it reads the
+# hidden-state caches that vision_ccs.py writes (see find_cache), re-creates the
+# same balanced pair order (build_pairs), and re-trains CCS + two supervised
+# baselines under a configurable, matched protocol. Entry point: main().
+# Consumers: extract.py, zero_shot.py, layer_sweep.py, test_reanalysis.py import
+# helpers from here. Nothing in this file modifies the extraction pipeline.
+# ============================================================================
 import argparse
 import json
 import re
@@ -14,16 +23,25 @@ _CCS_RE = r'^cache_{cat}_(\d+)_{tag}_ccs_aligned\.npz$'
 _SUP_RE = r'^cache_{cat}_(\d+)_supervised_contrast_{tag}\.npz$'
 
 
+# ============================================================================
+# NOTE (review): the two regexes are bound to cache names produced elsewhere:
+#   _CCS_RE -> vision_ccs.py (CONFIG cache_dir + tag '_ccs_aligned', line ~182)
+#   _SUP_RE -> the OLD supervised_vision.py ('supervised_contrast' caches).
+# The CCS cache wins when both exist; among several, the largest n is taken.
+# ============================================================================
 def find_cache(cache_dir, category, model_tag):
     """Locate cache file for a given category and model tag."""
     cache_dir = Path(cache_dir)
     if not cache_dir.is_dir():
         return None
     for pattern, kind in ((_CCS_RE, 'ccs'), (_SUP_RE, 'supervised')):
+        # re.escape so 'qwen2' cannot accidentally match 'qwen2_5'; the (\d+) group
+        # captures the sample count n embedded in the file name
         rx = re.compile(pattern.format(cat=re.escape(category), tag=re.escape(model_tag)))
         hits = [(p, int(rx.match(p.name).group(1))) for p in cache_dir.iterdir()
                 if rx.match(p.name)]
         if hits:
+            # several caches for the same cell -> take the one with the most rows
             path, n = max(hits, key=lambda t: t[1])
             return path, n, kind
     return None
@@ -40,6 +58,14 @@ def load_cache(path):
     return pos, neg, labels
 
 
+# ============================================================================
+# NOTE (review): mode='ccs' is a line-for-line port of vision_ccs.load_vqa_data
+# (balanced yes/no subsample, seed 42, same rng call order) so that cache row i
+# corresponds to pairs[i]. test_reanalysis.test_pair_reconstruction guards this.
+# NOTE POTENTIAL MISMATCH: n_samples is len(vqa_data) here, while vision_ccs.py
+# reads CONFIG['n_samples_<category>']; they coincide only because CONFIG derives
+# those counts from the same file. If CONFIG is ever capped, the orders diverge.
+# ============================================================================
 def build_pairs(vqa_json, category, mode, seed=42):
     """Reconstruct pair ordering from VQA dataset."""
     with open(vqa_json, 'r') as f:
@@ -52,10 +78,14 @@ def build_pairs(vqa_json, category, mode, seed=42):
         rng = np.random.default_rng(seed)
         yes_items = [it for it in vqa_data if it['answer'] == 'yes']
         no_items = [it for it in vqa_data if it['answer'] != 'yes']
+        # balance: equal numbers of yes and no, capped by the rarer class
         n_per_class = min(len(yes_items), len(no_items), n_samples // 2)
+        # random subsample of each class; the rng is consumed in EXACTLY the same
+        # order as vision_ccs.load_vqa_data so the resulting order is identical
         yes_sel = [yes_items[i] for i in rng.permutation(len(yes_items))[:n_per_class]]
         no_sel = [no_items[i] for i in rng.permutation(len(no_items))[:n_per_class]]
         samples = yes_sel + no_sel
+        # final shuffle so yes and no items are interleaved
         samples = [samples[i] for i in rng.permutation(len(samples))]
     else:
         raise ValueError(f'unknown mode {mode!r}')
@@ -73,6 +103,12 @@ def _image_exists(image_id, image_dirs):
     return any((Path(d) / name).exists() for d in image_dirs)
 
 
+# ============================================================================
+# NOTE (review): recovers image_ids for cached rows. The extractor silently
+# skips pairs whose image is missing, so the cache is a SUBSEQUENCE of pairs.
+# Replaying the same on-disk existence check reproduces the skip set; the
+# label sequence is then compared as a checksum before anything is trusted.
+# ============================================================================
 def align_pairs(pairs, labels, image_dirs=None):
     """Attach image_ids to cached rows, verified against the label sequence.
 
@@ -86,13 +122,17 @@ def align_pairs(pairs, labels, image_dirs=None):
     """
     pair_labels = np.array([p['label'] for p in pairs], dtype=int)
 
+    # case 1: nothing was skipped -> every pair maps to a cache row
     if len(pair_labels) == len(labels) and np.array_equal(pair_labels, labels):
         return np.array([p['image_id'] for p in pairs]), 'exact'
 
+    # case 2: extraction stopped early (e.g. --limit) -> cache is a prefix
     if len(labels) < len(pair_labels) and np.array_equal(pair_labels[:len(labels)], labels):
         return np.array([p['image_id'] for p in pairs[:len(labels)]]), 'prefix'
 
     if image_dirs:
+        # case 3: replay the extractor's skip rule (image missing on disk) and see
+        # whether the survivors' labels reproduce the cached label sequence exactly
         kept = [p for p in pairs if _image_exists(p['image_id'], image_dirs)]
         kept_labels = np.array([p['label'] for p in kept], dtype=int)
         if len(kept_labels) == len(labels) and np.array_equal(kept_labels, labels):
@@ -106,14 +146,24 @@ def align_pairs(pairs, labels, image_dirs=None):
                   f'-- pass --image-dirs to recover')
 
 
+# ============================================================================
+# NOTE POTENTIAL MISMATCH: this is numpy rng.permutation + round(n*frac), NOT
+# sklearn.train_test_split as in vision_ccs.py (train_ccs_probe, ~line 531).
+# The same seed therefore yields DIFFERENT train/test indices from the main
+# pipeline. groups=image_ids gives a split with no image on both sides, which
+# the main pipeline does not offer.
+# ============================================================================
 def make_split(n, seed, train_frac, groups=None):
     """Split dataset randomly or grouped by image."""
     rng = np.random.default_rng(seed)
     if groups is None:
         perm = rng.permutation(n)
+        # ungrouped: shuffle indices, first round(n*frac) go to train
         cut = int(round(n * train_frac))
         return np.sort(perm[:cut]), np.sort(perm[cut:])
 
+    # grouped: shuffle GROUPS (image ids), add whole groups to train until the
+    # accumulated row count reaches the target; remaining groups form the test set
     uniq = np.unique(groups)
     gperm = rng.permutation(len(uniq))
     target = int(round(n * train_frac))
@@ -124,26 +174,39 @@ def make_split(n, seed, train_frac, groups=None):
         g = uniq[gi]
         train_groups.add(g)
         count += int((groups == g).sum())
+    # row i is train iff its group was selected
     mask = np.array([g in train_groups for g in groups])
     return np.where(mask)[0], np.where(~mask)[0]
 
 
+# ============================================================================
+# NOTE (review): scheme='per_split' equals vision_ccs.py's normalize() (each of
+# the four arrays centred/scaled by its OWN stats; numpy population std matches
+# torch unbiased=False) up to the eps=1e-8 added here. scheme='train_stats'
+# scales test with train statistics, which is NOT what the original CCS
+# notebook's get_acc does; it exists as an ablation.
+# ============================================================================
 def normalize(pos_tr, neg_tr, pos_te, neg_te, scheme, var_normalize):
     """Normalize activation arrays."""
     eps = 1e-8
 
     def stats(x):
         mu = x.mean(axis=0, keepdims=True)
+        # column-wise mean and (population) std; eps keeps a constant column from
+        # producing 0/0. keepdims so broadcasting against (n, d) works
         sd = (x.std(axis=0, keepdims=True) + eps) if var_normalize else np.float32(1.0)
         return mu, sd
 
     if scheme == 'per_split':
         out = []
+        # per_split: each array standardised with its OWN mu/sd (as in the original
+        # CCS notebook, where test is normalised inside get_acc)
         for x in (pos_tr, neg_tr, pos_te, neg_te):
             mu, sd = stats(x)
             out.append((x - mu) / sd)
         return out
     if scheme == 'train_stats':
+        # train_stats: test arrays reuse the TRAIN mu/sd of their branch (pos or neg)
         pmu, psd = stats(pos_tr)
         nmu, nsd = stats(neg_tr)
         return [(pos_tr - pmu) / psd, (neg_tr - nmu) / nsd,
@@ -155,17 +218,24 @@ def _randomized_pca(X, k, seed=0, oversample=10, n_iter=4):
     """Top-k principal directions of X via randomized SVD."""
     rng = np.random.default_rng(seed)
     mu = X.mean(axis=0, keepdims=True)
+    # randomized SVD (Halko et al.): find the top-k subspace without a full SVD
     Xc = X - mu
+    # sketch: project onto k+oversample random directions, orthonormalise (QR)
     Q, _ = np.linalg.qr(Xc @ rng.normal(size=(Xc.shape[1], min(k + oversample, Xc.shape[1]))))
+    # power iterations: alternately multiply by Xc^T and Xc to sharpen the sketch
+    # toward the dominant singular directions (QR each time for stability)
     for _ in range(n_iter):
         Q, _ = np.linalg.qr(Xc.T @ Q)
         Q, _ = np.linalg.qr(Xc @ Q)
+    # exact SVD of the small (k+oversample) x d matrix; rows of Vt are principal
+    # directions of Xc; return the first k as COLUMNS (d, k)
     _, _, Vt = np.linalg.svd(Q.T @ Xc, full_matrices=False)
     return mu, Vt[:k].T
 
 
 def pca_reduce(pos_tr, neg_tr, pos_te, neg_te, k, seed=0):
     """Project activations onto top-k principal components fit on train."""
+    # basis fit on TRAIN only (both branches pooled); test is merely projected
     mu, W = _randomized_pca(np.concatenate([pos_tr, neg_tr], axis=0), k, seed=seed)
     return tuple(((x - mu) @ W).astype(np.float32)
                  for x in (pos_tr, neg_tr, pos_te, neg_te))
@@ -174,6 +244,7 @@ def pca_reduce(pos_tr, neg_tr, pos_te, neg_te, k, seed=0):
 def gaussian_control(pos_tr, neg_tr, pos_te, neg_te, seed=0):
     """Generate Gaussian noise control matching input shapes."""
     rng = np.random.default_rng(seed)
+    # same shapes, pure N(0,1) noise: any accuracy above chance is protocol artefact
     return tuple(rng.standard_normal(x.shape).astype(np.float32)
                  for x in (pos_tr, neg_tr, pos_te, neg_te))
 
@@ -182,16 +253,21 @@ def auroc(scores, y):
     """Compute rank-based AUROC with tie correction."""
     y = np.asarray(y).astype(int)
     scores = np.asarray(scores, dtype=float)
+    # AUROC = P(score of a random positive > score of a random negative),
+    # computed from ranks (Mann-Whitney U); n1 positives, n0 negatives
     n1 = int(y.sum())
     n0 = len(y) - n1
     if n0 == 0 or n1 == 0:
         return float('nan')
 
+    # ranks 1..n by ascending score; stable sort so ties are adjacent
     order = np.argsort(scores, kind='mergesort')
     s = scores[order]
     ranks = np.empty(len(scores), dtype=float)
     ranks[order] = np.arange(1, len(scores) + 1, dtype=float)
     i = 0
+    # tie handling: every run of equal scores gets the AVERAGE of the ranks it
+    # spans, e.g. ranks 3 and 4 both become 3.5
     while i < len(s):
         j = i
         while j + 1 < len(s) and s[j + 1] == s[i]:
@@ -200,16 +276,26 @@ def auroc(scores, y):
             ranks[order[i:j + 1]] = (i + 1 + j + 1) / 2.0
         i = j + 1
 
+    # U = (sum of positive ranks) - n1(n1+1)/2 = number of (pos, neg) pairs with
+    # pos ranked higher (ties count 1/2); divide by all n0*n1 pairs -> [0, 1]
     return (ranks[y == 1].sum() - n1 * (n1 + 1) / 2.0) / (n0 * n1)
 
 
+# ============================================================================
+# NOTE (review): flipped_acc = max(acc, 1-acc) is the original CCS orientation
+# rule; raw_acc keeps the un-flipped value. AUROC, per-class accuracy and a
+# normal-approximation 95% CI are additions over vision_ccs.py's reporting.
+# ============================================================================
 def score_report(scores, y):
     """Compute accuracy and AUROC metrics."""
     y = np.asarray(y).astype(int)
+    # hard prediction at 0.5; CCS orientation is arbitrary so both readings are kept
     preds = (np.asarray(scores) > 0.5).astype(int)
     raw_acc = float((preds == y).mean())
     a = auroc(scores, y)
     pos_m, neg_m = y == 1, y == 0
+    # orientation flip (original CCS: max(acc, 1-acc)); per-class accuracies use
+    # the flipped predictions so they describe the oriented probe
     flipped = preds if raw_acc >= 0.5 else 1 - preds
     return {
         'raw_acc': raw_acc,
@@ -219,15 +305,22 @@ def score_report(scores, y):
         'acc_pos': float((flipped[pos_m] == y[pos_m]).mean()) if pos_m.any() else float('nan'),
         'acc_neg': float((flipped[neg_m] == y[neg_m]).mean()) if neg_m.any() else float('nan'),
         'n_test': int(len(y)),
+        # normal-approximation half-width of a 95% CI for a proportion: 1.96*sqrt(p(1-p)/n)
         'ci95': 1.96 * float(np.sqrt(max(raw_acc, 1 - raw_acc) * (1 - max(raw_acc, 1 - raw_acc)) / len(y))),
     }
 
 
 def _probe_and_opt(torch, nn, optim, d, lr, wd, device):
+    # p(x) = sigmoid(w.x + b): the linear CCS probe, same as vision_ccs.CCSProbe
     probe = nn.Sequential(nn.Linear(d, 1), nn.Sigmoid()).to(device)
     return probe, optim.AdamW(probe.parameters(), lr=lr, weight_decay=wd)
 
 
+# ============================================================================
+# NOTE (review): optional (cfg['weight_norm']=='unit', off by default). Not part
+# of the original CCS; applied after every optimizer step to both the CCS and
+# the supervised probe so the two stay comparable.
+# ============================================================================
 def _project_unit_norm(torch, probe):
     """Project the probe's weight vector back onto the unit sphere.
 
@@ -250,27 +343,50 @@ def _project_unit_norm(torch, probe):
     asymmetry of exactly the kind this whole re-analysis removed.
     """
     with torch.no_grad():
+        # weight has shape (1, d); divide the row by its L2 norm in place (no grad).
+        # clamp_min avoids 0/0 if the weight is exactly zero
         w = probe[0].weight
         w.div_(w.norm(p=2, dim=1, keepdim=True).clamp_min(1e-12))
 
 
+# ============================================================================
+# NOTE (review): consistency_err is the MEAN ABSOLUTE |p+ + p- - 1|, i.e. an L1
+# version of the squared consistency loss; 'saturated' counts outputs beyond
+# 0.99 / below 0.01 pooled over both branches. The numbers quoted in the
+# comment below are the author's measurements, not verified in this review.
+# ============================================================================
 def probe_diagnostics(p_pos, p_neg):
     """Compute consistency, confidence, and saturation diagnostics."""
     p_pos = np.asarray(p_pos, dtype=float).ravel()
     p_neg = np.asarray(p_neg, dtype=float).ravel()
     both = np.concatenate([p_pos, p_neg])
     return {
+        # |p+ + p- - 1| averaged: 0 means the two branches are perfectly complementary
         'consistency_err': float(np.abs(p_pos + p_neg - 1.0).mean()),
+        # min(p+, p-) averaged: 0.5 is the degenerate 'both 0.5' solution, ~0 is confident
         'confidence': float(np.minimum(p_pos, p_neg).mean()),
         # Pooled over both branches. MEASURED, not assumed: over 300 restarts
         # corr(saturated, accuracy) = +0.775 -- confident probes are the GOOD
         # ones. The worst probe observed (52.0% on object_detection/seed42) had
         # the lowest saturation of its ten restarts. Selecting max-saturation
         # scores 82.3% vs 79.4% for Burns' lowest-loss rule.
+        # fraction of outputs pinned at the sigmoid's ends (pooled over both branches)
         'saturated': float(((both > 0.99) | (both < 0.01)).mean()),
     }
 
 
+# ============================================================================
+# NOTE (review): same objective, optimizer, budget and restart count as
+# vision_ccs.train_ccs_probe (AdamW, lr, wd, epochs, ntries, full batch,
+# per-run permutation, last-step loss). Differences that DO affect numbers:
+# NOTE POTENTIAL MISMATCH 1: cfg['val_frac'] (default 0.2) of TRAIN is held
+#   out and never fitted, even under selection='loss'. With train_frac 0.6 the
+#   probe fits on 48% of the data; vision_ccs.py fits on the full 60%.
+# NOTE POTENTIAL MISMATCH 2: torch.manual_seed(seed*1000+t) per restart;
+#   vision_ccs.py leaves probe initialisation unseeded.
+# NOTE POTENTIAL MISMATCH 3: selection rule is configurable; only 'loss'
+#   reproduces the original. y_tr / y_te are used for reporting only.
+# ============================================================================
 def train_ccs(pos_tr, neg_tr, pos_te, neg_te, cfg, seed, y_tr=None, y_te=None):
     """Train unsupervised CCS probe over cfg['ntries'] restarts.
 
@@ -303,44 +419,61 @@ def train_ccs(pos_tr, neg_tr, pos_te, neg_te, cfg, seed, y_tr=None, y_te=None):
     n_tr = len(pos_tr)
     val_frac = cfg.get('val_frac', 0.2)
     rng = np.random.default_rng(seed)
+    # hold out val_frac of the TRAIN rows: first n_val of a seeded permutation
+    # are validation, the rest ('fit') are what the probe is trained on
     perm_np = rng.permutation(n_tr)
     n_val = int(round(n_tr * val_frac))
     val_i, fit_i = perm_np[:n_val], perm_np[n_val:]
     # fall back to fitting on everything if either side would be unusable
     # (n_fit == 0 would otherwise crash; a 1-row val slice is meaningless)
+    # degenerate sizes (tiny cells / smoke tests): skip the hold-out entirely
     if len(val_i) < 2 or len(fit_i) < 2:
         val_i, fit_i = np.array([], dtype=int), np.arange(n_tr)
 
+    # X* = fit rows, V* = validation rows, T* = test rows; p/n = Yes/No branch
     Xp = torch.tensor(pos_tr[fit_i], dtype=torch.float32, device=device)
     Xn = torch.tensor(neg_tr[fit_i], dtype=torch.float32, device=device)
     Vp = torch.tensor(pos_tr[val_i], dtype=torch.float32, device=device)
     Vn = torch.tensor(neg_tr[val_i], dtype=torch.float32, device=device)
     Tp = torch.tensor(pos_te, dtype=torch.float32, device=device)
     Tn = torch.tensor(neg_te, dtype=torch.float32, device=device)
+    # labels are optional and only used for reporting accuracies
     y_fit = None if y_tr is None else np.asarray(y_tr)[fit_i]
 
     best_loss, best_probe, restarts, probes = float('inf'), None, [], []
     for t in range(cfg['ntries']):
+        # deterministic init per (seed, restart): restart t of seed 42 -> 42000 + t
         torch.manual_seed(seed * 1000 + t)
         probe, opt = _probe_and_opt(torch, nn, optim, Xp.shape[1],
                                     cfg['lr'], cfg['weight_decay'], device)
+        # shuffle rows once per restart (mirrors the original train()); with full-batch
+        # updates this does not change the gradient, only the row order
         perm = torch.randperm(len(Xp), device=device)
         xp, xn = Xp[perm], Xn[perm]
         for _ in range(cfg['epochs']):
             p_pos, p_neg = probe(xp), probe(xn)
+            # CCS objective = consistency  mean((p+ - (1 - p-))^2)   [p+ should equal 1 - p-]
+            #               + confidence   mean(min(p+, p-)^2)       [rules out p+ = p- = 0.5]
             loss = ((p_pos - (1 - p_neg)) ** 2).mean() + (torch.min(p_pos, p_neg) ** 2).mean()
             opt.zero_grad()
             loss.backward()
             opt.step()
             if cfg.get('weight_norm') == 'unit':
+                # optional ablation: keep ||w|| = 1 after every step
                 _project_unit_norm(torch, probe)
+        # last-step training loss = the original CCS selection criterion
         fl = float(loss.detach().cpu())
 
         with torch.no_grad():
+            # score every set with this restart's probe; squeeze (n,1) -> (n,)
             tr_pos, tr_neg = probe(Xp).squeeze(-1), probe(Xn).squeeze(-1)
             te_pos, te_neg = probe(Tp).squeeze(-1), probe(Tn).squeeze(-1)
+            # CCS prediction score = average of the two estimates of P(yes):
+            # p+ says 'Yes-statement is true', 1 - p- says 'No-statement is false'
             s_tr = (0.5 * (tr_pos + (1 - tr_neg))).cpu().numpy()
             s_te = (0.5 * (te_pos + (1 - te_neg))).cpu().numpy()
+            # per-restart record: loss, diagnostics on TEST inputs (label-free), the same
+            # diagnostics on the held-out slice as val_*, and accuracies if labels given
             rec = {'restart': t, 'loss': fl,
                    **probe_diagnostics(te_pos.cpu().numpy(), te_neg.cpu().numpy())}
             if len(val_i):
@@ -356,12 +489,16 @@ def train_ccs(pos_tr, neg_tr, pos_te, neg_te, cfg, seed, y_tr=None, y_te=None):
             if y_fit is not None:
                 rec['train_acc_flipped'] = score_report(s_tr, y_fit)['flipped_acc']
             restarts.append(rec)
+            # keep every probe so the selection rule can be applied after the loop
             probes.append(copy.deepcopy(probe))
 
+        # running best by loss (the original rule) as the default choice
         if fl < best_loss:
             best_loss, best_probe = fl, copy.deepcopy(probe)
 
     # headline probe follows cfg['selection']; 'loss' reproduces Burns exactly
+    # override the choice for the other rules: argmin of the chosen record key
+    # (val_consistency_err = held-out train slice; consistency_err = test inputs)
     rule = cfg.get('selection', 'loss')
     if rule != 'loss':
         key = {'val_consistency': 'val_consistency_err',
@@ -370,6 +507,8 @@ def train_ccs(pos_tr, neg_tr, pos_te, neg_te, cfg, seed, y_tr=None, y_te=None):
             best_probe = probes[int(np.argmin([r[key] for r in restarts]))]
 
     with torch.no_grad():
+        # final outputs: averaged test scores of the selected probe, plus its
+        # diagnostics and (if labels) its accuracy on the fit rows
         bp, bn = best_probe(Tp).squeeze(-1), best_probe(Tn).squeeze(-1)
         scores = (0.5 * (bp + (1 - bn))).cpu().numpy()
         diag = probe_diagnostics(bp.cpu().numpy(), bn.cpu().numpy())
@@ -385,6 +524,11 @@ def train_ccs(pos_tr, neg_tr, pos_te, neg_te, cfg, seed, y_tr=None, y_te=None):
                     'train_acc_flipped': train_acc, **diag}
 
 
+# ============================================================================
+# NOTE POTENTIAL MISMATCH: 10 restarts with the best chosen by lowest TRAIN BCE;
+# the supervised probes in supervised_vision.py / revised_supervised_vision.py
+# train once. BCE input is clamped to [1e-6, 1-1e-6]; the main pipeline does not.
+# ============================================================================
 def train_supervised_probe(pos_tr, neg_tr, pos_te, neg_te, y_tr, cfg, seed):
     """Train supervised baseline probe."""
     import torch
@@ -396,6 +540,8 @@ def train_supervised_probe(pos_tr, neg_tr, pos_te, neg_te, y_tr, cfg, seed):
     Xp = torch.tensor(pos_tr, dtype=torch.float32, device=device)
     Xn = torch.tensor(neg_tr, dtype=torch.float32, device=device)
     Y = torch.tensor(y_tr, dtype=torch.float32, device=device)
+    # supervised counterpart: same probe, same averaged score, but trained with
+    # binary cross-entropy against the TRUE labels
     crit = nn.BCELoss()
 
     best_loss, best_probe = float('inf'), None
@@ -404,13 +550,17 @@ def train_supervised_probe(pos_tr, neg_tr, pos_te, neg_te, y_tr, cfg, seed):
         probe, opt = _probe_and_opt(torch, nn, optim, Xp.shape[1],
                                     cfg['lr'], cfg['weight_decay'], device)
         for _ in range(cfg['epochs']):
+            # identical scoring rule to CCS so the two probes are directly comparable
             avg = 0.5 * (probe(Xp).squeeze(-1) + (1 - probe(Xn).squeeze(-1)))
+            # clamp keeps log(0) out of BCE when the sigmoid saturates
             loss = crit(avg.clamp(1e-6, 1 - 1e-6), Y)
             opt.zero_grad()
             loss.backward()
             opt.step()
             if cfg.get('weight_norm') == 'unit':
                 _project_unit_norm(torch, probe)
+        # best of the restarts by final TRAINING loss (labels are already used, so
+        # no unsupervised criterion is needed here)
         fl = float(loss.detach().cpu())
         if fl < best_loss:
             best_loss, best_probe = fl, copy.deepcopy(probe)
@@ -422,18 +572,28 @@ def train_supervised_probe(pos_tr, neg_tr, pos_te, neg_te, y_tr, cfg, seed):
     return scores, {'best_loss': best_loss}
 
 
+# ============================================================================
+# NOTE POTENTIAL MISMATCH: sweeps C over {1e-3..10} on an 80/20 slice of train
+# and uses max_iter=1000; the original notebook and supervised_vision.py use
+# LogisticRegression(class_weight='balanced') with default C=1. Features are
+# neg - pos as in the notebook (the paper uses the normalized pair instead).
+# ============================================================================
 def train_logreg(pos_tr, neg_tr, pos_te, neg_te, y_tr, seed):
     """Train logistic regression baseline with parameter sweep on train slice."""
     from sklearn.linear_model import LogisticRegression
 
+    # feature = difference of the two branches, as in the original CCS notebook
     x_tr, x_te = neg_tr - pos_tr, neg_te - pos_te
     rng = np.random.default_rng(seed)
     perm = rng.permutation(len(x_tr))
+    # inner 80/20 split of TRAIN to choose the regularisation strength C
     cut = int(round(0.8 * len(x_tr)))
     fit_i, val_i = perm[:cut], perm[cut:]
 
+    # (best validation accuracy so far, its C); smaller C = stronger L2 penalty
     best = (-1.0, 1.0)
     for C in (0.001, 0.01, 0.1, 1.0, 10.0):
+        # class_weight='balanced' reweights classes to equal total weight
         m = LogisticRegression(class_weight='balanced', max_iter=1000, C=C)
         m.fit(x_tr[fit_i], y_tr[fit_i])
         s = m.score(x_tr[val_i], y_tr[val_i])
@@ -442,26 +602,39 @@ def train_logreg(pos_tr, neg_tr, pos_te, neg_te, y_tr, seed):
     val_acc, C = best
 
     m = LogisticRegression(class_weight='balanced', max_iter=1000, C=C)
+    # refit on ALL train rows with the chosen C; n_iter_ tells whether the
+    # solver converged before max_iter (reported alongside the accuracy)
     m.fit(x_tr, y_tr)
     n_iter = int(np.max(m.n_iter_))
     return m.predict_proba(x_te)[:, 1], {'C': C, 'val_acc': val_acc,
                                          'n_iter': n_iter, 'converged': n_iter < 1000}
 
 
+# ============================================================================
+# NOTE (review): one (model, category, split kind, seed) cell: split -> normalize
+# -> CCS + supervised probe + logreg, then optional controls (Gaussian noise,
+# PCA-k) run through the SAME three methods. Per-item CCS predictions are
+# stored ORIENTED (flipped if raw_acc < 0.5) so compare_zeroshot.py can align
+# them with zero_shot.py row-for-row via test_idx.
+# ============================================================================
 def run_cell(pos, neg, labels, image_ids, cfg, seed, grouped, norm_scheme,
              controls=False, pca_k=50):
     """Evaluate all methods on a single configuration cell."""
+    # grouped split needs image ids (from align_pairs); None -> plain random split
     groups = image_ids if grouped else None
     tr, te = make_split(len(labels), seed, cfg['train_frac'], groups=groups)
     y_tr, y_te = labels[tr], labels[te]
 
     out = {'grouped': bool(grouped), 'n_train': int(len(tr)), 'n_test': int(len(te)),
            'test_yes_frac': float(y_te.mean())}
+    # how many test rows share an IMAGE with some train row (leak diagnostic)
     out['leaked_test_rows'] = (int(np.isin(image_ids[te], image_ids[tr]).sum())
                                if image_ids is not None else None)
     if out['leaked_test_rows'] is not None:
         out['leaked_test_frac'] = out['leaked_test_rows'] / max(len(te), 1)
 
+    # run all three methods on one feature set and write results into tag_into;
+    # reused unchanged for the raw features and for each control
     def methods(p_tr, n_tr, p_te, n_te, tag_into):
         s, meta = train_ccs(p_tr, n_tr, p_te, n_te, cfg, seed, y_tr=y_tr, y_te=y_te)
         tag_into['ccs'] = {**score_report(s, y_te), **meta, '_scores': [float(v) for v in s]}
@@ -479,6 +652,7 @@ def run_cell(pos, neg, labels, image_ids, cfg, seed, grouped, norm_scheme,
             except ImportError:
                 tag_into['logreg'] = {'error': 'sklearn unavailable'}
 
+    # split THEN normalise, so test statistics never leak into train under per_split
     raw = normalize(pos[tr], neg[tr], pos[te], neg[te], norm_scheme, cfg['var_normalize'])
     methods(*raw, out)
 
@@ -491,6 +665,8 @@ def run_cell(pos, neg, labels, image_ids, cfg, seed, grouped, norm_scheme,
     # zero_shot.py's output row-for-row.
     out['test_idx'] = [int(i) for i in te]
     if '_scores' in out['ccs']:
+        # per-item CCS predictions for compare_zeroshot.py: thresholded, then ORIENTED
+        # with the same flip score_report used, and stored next to their row indices
         preds = (np.asarray(out['ccs'].pop('_scores')) > 0.5).astype(int)
         # CCS polarity is arbitrary (the loss is invariant under p -> 1-p on both
         # branches), so store the ORIENTED prediction -- the same flip
@@ -504,11 +680,14 @@ def run_cell(pos, neg, labels, image_ids, cfg, seed, grouped, norm_scheme,
 
     if controls:
         out['controls'] = {}
+        # control 1: replace features by noise, normalise, rerun the three methods
         g = gaussian_control(*raw, seed=seed)
         gn = normalize(*g, scheme=norm_scheme, var_normalize=cfg['var_normalize'])
         out['controls']['gaussian'] = {}
         methods(*gn, out['controls']['gaussian'])
 
+        # control 2: project RAW (un-normalised) features to k PCs fit on train, then
+        # normalise and rerun
         pc = pca_reduce(pos[tr], neg[tr], pos[te], neg[te], pca_k, seed=seed)
         pcn = normalize(*pc, scheme=norm_scheme, var_normalize=cfg['var_normalize'])
         out['controls'][f'pca{pca_k}'] = {}
@@ -517,6 +696,12 @@ def run_cell(pos, neg, labels, image_ids, cfg, seed, grouped, norm_scheme,
     return out
 
 
+# ============================================================================
+# NOTE (review): CLI defaults mirror vision_ccs.CONFIG where they overlap:
+# cache-dir 'hidden_states_cache_final', train-frac 0.6, lr 1e-2, wd 0.01,
+# epochs 1000, ntries 10, var-normalize on. Default selection is 'loss'
+# (original CCS), unlike layer_sweep.py whose default is 'val_consistency'.
+# ============================================================================
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--cache-dir', default='./hidden_states_cache_final')
@@ -561,6 +746,7 @@ def main():
     ap.add_argument('--out', default='./reanalysis_results.json')
     args = ap.parse_args()
 
+    # everything the training functions need, also echoed into the output JSON
     cfg = {'train_frac': args.train_frac, 'epochs': args.epochs, 'ntries': args.ntries,
            'lr': args.lr, 'weight_decay': args.weight_decay,
            'var_normalize': not args.no_var_normalize,
@@ -581,6 +767,7 @@ def main():
             path, _, kind = found
             pos, neg, labels = load_cache(path)
 
+            # rebuild the row order the cache was extracted in (depends on cache kind)
             pairs = build_pairs(args.vqa_json, category,
                                 mode='ccs' if kind == 'ccs' else 'supervised')
             image_ids, status = align_pairs(pairs, labels, args.image_dirs)
@@ -591,6 +778,7 @@ def main():
                   f'image_id alignment: {status}')
 
             splits = list(args.splits)
+            # no image ids -> a grouped split is impossible; keep the ungrouped one
             if image_ids is None and 'grouped' in splits:
                 print('  [warning] alignment failed -> skipping grouped split')
                 splits = [s for s in splits if s != 'grouped']
@@ -605,6 +793,7 @@ def main():
                     cell = run_cell(pos, neg, labels, image_ids, cfg, seed,
                                     split_kind == 'grouped', args.norm,
                                     controls=args.controls, pca_k=args.pca_k)
+                    # run key e.g. 'grouped/seed42'; compare_zeroshot / select_criteria parse it
                     results['cells'][key]['runs'][f'{split_kind}/seed{seed}'] = cell
                     _print_cell(split_kind, seed, cell, args.pca_k)
 
@@ -649,6 +838,8 @@ def _print_summary(results, pca_k):
     print(hdr)
     print('-' * len(hdr))
 
+    # walk a nested key path (e.g. ['ccs', 'flipped_acc']) in every run and
+    # return (mean, std) over seeds, or None if any run lacks it / has an error
     def agg(runs, path):
         vals = []
         for r in runs:
@@ -676,6 +867,7 @@ def _print_summary(results, pca_k):
                   f"{cellstr(agg(runs, ['logreg', 'raw_acc'])):>15s} "
                   f"{cellstr(agg(runs, ['ccs', 'flipped_auroc']), pct=False):>12s}")
 
+    # does a lower final loss predict a better probe? Pool every stored restart
     xs, ys = [], []
     for c in results['cells'].values():
         for r in c['runs'].values():
@@ -684,6 +876,8 @@ def _print_summary(results, pca_k):
                     xs.append(rec['loss'])
                     ys.append(rec['test_acc_flipped'])
     if len(xs) > 2 and np.std(xs) > 0 and np.std(ys) > 0:
+        # Pearson r between log(loss) and test accuracy; strongly negative would mean
+        # loss is a good selector, near zero or positive means it is not
         rho = float(np.corrcoef(np.log(np.maximum(xs, 1e-12)), ys)[0, 1])
         print(f"\ncorr(log final loss, test acc) over {len(xs)} restarts: {rho:+.3f}")
 

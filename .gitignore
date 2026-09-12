@@ -215,3 +215,5 @@ __marimo__/
 hidden_states_cache*/
 *.npz
 reanalysis_results*.json
+
+*.html

@@ -29,6 +29,13 @@ cache (--shuffled), so it sweeps identically.
     python layer_sweep.py --cache-dir ./caches_v3 --model qwen2
 """
 
+# ============================================================================
+# NOTE (review): ROLE OF THIS FILE
+# Runs the reanalysis protocol at every (layer, position) cell of an extract.py
+# v3 cache. Reuses make_split / normalize / train_* from reanalysis.py.
+# NOTE POTENTIAL MISMATCH: default --selection here is 'val_consistency',
+# whereas reanalysis.py defaults to 'loss' (the original CCS rule).
+# ============================================================================
 import argparse
 import json
 import sys
@@ -48,12 +55,14 @@ def find_cache_v3(cache_dir, model_tag, category, shuffled=False):
 
 def load_cache_v3(path):
     """Load a Phase 1 cache. Arrays stay float16 until a cell is sliced out."""
+    # np.load is lazy for .npz: arrays are only read when indexed below
     d = np.load(path)
     need = ('pos_hiddens', 'neg_hiddens', 'labels', 'layers', 'positions')
     missing = [k for k in need if k not in d]
     if missing:
         raise ValueError(f'{path}: missing keys {missing} -- is this a v3 cache?')
     pos, neg = d['pos_hiddens'], d['neg_hiddens']
+    # v3 layout is (n items, n layers kept, n positions, hidden dim d)
     if pos.ndim != 4:
         raise ValueError(f'{path}: expected (n, layers, positions, d), got {pos.shape}')
     if pos.shape != neg.shape:
@@ -70,12 +79,20 @@ def load_cache_v3(path):
 
 def cell_arrays(cache, li, pi):
     """Slice one (layer, position) out as float32 (n, d) for pos and neg."""
+    # select one layer index li and one position index pi -> (n, d) float32;
+    # the float16 -> float32 cast happens only for the cell being analysed
     return (cache['pos'][:, li, pi, :].astype(np.float32),
             cache['neg'][:, li, pi, :].astype(np.float32))
 
 
+# ============================================================================
+# NOTE (review): one seed at one cell. 'restarts' is dropped from the CCS meta
+# to keep the sweep JSON small, so select_criteria.py cannot be run on a
+# layer-sweep output.
+# ============================================================================
 def run_one(pos, neg, labels, image_ids, cfg, seed, grouped, norm_scheme,
             skip_logreg):
+    # identical protocol to reanalysis.run_cell, minus the controls
     groups = image_ids if grouped else None
     tr, te = make_split(len(labels), seed, cfg['train_frac'], groups=groups)
     y_tr, y_te = labels[tr], labels[te]
@@ -83,9 +100,11 @@ def run_one(pos, neg, labels, image_ids, cfg, seed, grouped, norm_scheme,
                                        norm_scheme, cfg['var_normalize'])
     out = {'n_train': int(len(tr)), 'n_test': int(len(te))}
     if image_ids is not None:
+        # share of test rows whose IMAGE also occurs in train (0 for a grouped split)
         out['leaked_test_frac'] = float(np.isin(image_ids[te], image_ids[tr]).mean())
 
     s, meta = train_ccs(p_tr, n_tr, p_te, n_te, cfg, seed, y_tr=y_tr, y_te=y_te)
+    # consequence: select_criteria.py cannot be run on a layer-sweep JSON
     meta.pop('restarts', None)          # keep the sweep JSON small
     out['ccs'] = {**score_report(s, y_te), **meta}
     s, _ = train_supervised_probe(p_tr, n_tr, p_te, n_te, y_tr, cfg, seed)
@@ -149,6 +168,7 @@ def main():
             continue
         cache = load_cache_v3(path)
         layers, positions = cache['layers'], cache['positions']
+        # map requested layer NUMBERS / position NAMES to indices into the cache axes
         li_sel = [i for i, l in enumerate(layers)
                   if args.layers is None or l in args.layers]
         pi_sel = [i for i, p in enumerate(positions)
@@ -161,6 +181,7 @@ def main():
         print(f'  positions {[positions[i] for i in pi_sel]}')
         print('=' * 78)
 
+        # grid entries are keyed 'position/L<layer>' -> {seed: run_one result}
         key = f'{args.model}/{category}'
         results['cells'][key] = {'file': path.name, 'n': int(len(cache['labels'])),
                                  'layers': layers, 'positions': positions,
@@ -172,6 +193,7 @@ def main():
             print(f"    {'layer':>6s} {'CCS':>16s} {'sup_probe':>16s} {'loss':>10s}")
             for li in li_sel:
                 P, N = cell_arrays(cache, li, pi)
+                # per cell: repeat over seeds and report mean +/- std (std = spread over seeds)
                 accs, sups, losses, valcons = [], [], [], []
                 for seed in args.seeds:
                     r = run_one(P, N, cache['labels'], cache['image_ids'], cfg,
@@ -179,6 +201,8 @@ def main():
                     accs.append(r['ccs']['flipped_acc'])
                     sups.append(r['sup_probe']['raw_acc'])
                     losses.append(r['ccs']['best_loss'])
+                    # NOTE: this is the TEST-input consistency error of the selected probe,
+                    # not the held-out-train 'val_consistency_err' (see _report_picked_layer)
                     valcons.append(r['ccs'].get('consistency_err', float('nan')))
                     results['cells'][key]['grid'].setdefault(
                         f'{pos_name}/L{layers[li]}', {})[str(seed)] = r
@@ -194,6 +218,13 @@ def main():
     return 0
 
 
+# ============================================================================
+# NOTE POTENTIAL MISMATCH (docstring vs code): the module docstring says the
+# layer is chosen by the 'val_consistency' criterion, but this function ranks
+# cells by 'consistency_err', which train_ccs computes on the TEST inputs of
+# the selected probe. That is label-free but transductive, not the held-out
+# train-slice ('val_consistency_err') value.
+# ============================================================================
 def _report_picked_layer(results):
     """Name a layer WITHOUT looking at test accuracy, and price the choice.
 
@@ -214,10 +245,13 @@ def _report_picked_layer(results):
             rows.append((gk, acc, con))
         if not rows:
             continue
+        # r[2] == r[2] is the idiom for 'not NaN' (NaN is the only value != itself)
         finite = [r for r in rows if r[2] == r[2]]
         if not finite:
             print(f'  {key:34s} (no consistency values recorded)')
             continue
+        # label-free pick: lowest consistency error;  oracle: highest accuracy (labels);
+        # cost = picked accuracy - oracle accuracy (<= 0, how much honesty costs)
         picked = min(finite, key=lambda r: r[2])
         oracle = max(rows, key=lambda r: r[1])
         print(f'  {key:34s} {picked[0]:>10s} {picked[1]:8.1%} '

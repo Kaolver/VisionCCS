@@ -1,5 +1,14 @@
 """Multi-layer hidden state extraction with token position tracking."""
 
+# ============================================================================
+# NOTE (review): ROLE OF THIS FILE
+# 'v3' extractor for the layer/position sweep. Unlike vision_ccs.extract_in_
+# batches (last layer, last token only) it keeps EVERY --layer-stride-th layer
+# plus the last, at up to three token positions, stored as float16 with
+# image_ids/question_ids. Output hs_<model>_<cat>.npz has shape
+# (n, layers, positions, d) and is read by layer_sweep.load_cache_v3, NOT by
+# reanalysis.find_cache (different file name and layout).
+# ============================================================================
 import argparse
 import gc
 import json
@@ -20,6 +29,7 @@ MODEL_PATHS = {
 def load_model(model_tag, device):
     """Load processor and model in bfloat16."""
     import torch
+    # bfloat16 halves memory on GPU; on CPU fall back to float32
     dtype = torch.bfloat16 if device == 'cuda' else torch.float32
     path = MODEL_PATHS[model_tag]
 
@@ -44,23 +54,40 @@ def load_model(model_tag, device):
     return model, proc
 
 
+# ============================================================================
+# NOTE (review): the token that closes the USER turn: <|im_end|> for Qwen,
+# </s> (EOS) for LLaVA. Used by locate_positions to find the answer token.
+# ============================================================================
 def end_of_turn_id(model_tag, tok):
     """Token closing the user turn: <|im_end|> for Qwen, EOS for LLaVA."""
     if model_tag == 'llava':
         return tok.eos_token_id
+    # Qwen chat template closes each turn with <|im_end|>; if the tokenizer does
+    # not know it (returns None or the unk id) fall back to the generic EOS
     tid = tok.convert_tokens_to_ids('<|im_end|>')
     return tid if tid is not None and tid >= 0 else tok.eos_token_id
 
 
+# ============================================================================
+# NOTE (review): prompt construction mirrors vision_ccs.py exactly: LLaVA gets
+# 'USER: <image>\n{text}' + EOS (vision_ccs.py ~375-376); Qwen uses the chat
+# template with add_generation_prompt=False (~429 / ~483).
+# NOTE POTENTIAL MISMATCH: load_model() loads LLaVA in bfloat16 on CUDA, while
+# vision_ccs.py loads LLaVA in float16 (line ~149). Hidden states can differ
+# in the low bits between the two extractors.
+# ============================================================================
 def build_inputs(model_tag, proc, image, text):
     """Build inputs for a statement prompt."""
     if model_tag == 'llava':
+        # LLaVA: plain string prompt, statement followed directly by EOS (no
+        # 'ASSISTANT:' cue) so the last token sits right after 'Yes'/'No'
         eos = proc.tokenizer.eos_token or ''
         return proc(images=image, text=f'USER: <image>\n{text}{eos}',
                     return_tensors='pt'), None
     from qwen_vl_utils import process_vision_info
     messages = [{'role': 'user', 'content': [
         {'type': 'image', 'image': image}, {'type': 'text', 'text': text}]}]
+    # Qwen: chat template WITHOUT generation prompt -> text ends '...Yes<|im_end|>\n'
     prompt = proc.apply_chat_template(messages, tokenize=False,
                                       add_generation_prompt=False)
     imgs, vids = process_vision_info(messages)
@@ -68,8 +95,17 @@ def build_inputs(model_tag, proc, image, text):
                 return_tensors='pt'), prompt
 
 
+# ============================================================================
+# NOTE (review): 'final' = last token of the sequence = what vision_ccs.py
+# pools ([-1]). 'eot' = last occurrence of the end-of-turn id. 'answer' = the
+# token right before it (the 'Yes'/'No' token). For Qwen the template ends
+# '<|im_end|>\n', so final != eot; for LLaVA eot == final. If eot is absent
+# everything falls back to the last token.
+# ============================================================================
 def locate_positions(input_ids, eot_id):
     """Map position names to token indices in sequence."""
+    # walk backwards from the end to find the LAST end-of-turn token; the answer
+    # token is the one just before it. Positions are indices into the sequence.
     ids = input_ids.tolist()
     last = len(ids) - 1
     eot = last
@@ -77,6 +113,8 @@ def locate_positions(input_ids, eot_id):
         if ids[i] == eot_id:
             eot = i
             break
+    # 'final' is what vision_ccs.py pools (index -1). For Qwen final = the '\n'
+    # after <|im_end|>; for LLaVA eot == final. max(.., 0) guards a 1-token input.
     return {'answer': max(eot - 1, 0), 'eot': eot, 'final': last}
 
 
@@ -89,22 +127,38 @@ def find_image(image_id, image_dirs):
     return None
 
 
+# ============================================================================
+# NOTE (review): one forward pass, then hidden_states[l][0, positions, :] for
+# every requested layer; returned as float16 to keep caches small.
+# ============================================================================
 def extract_one(model, proc, model_tag, image, text, layers, pos_names, eot_id):
     """Run one forward pass and extract hidden states across selected layers and positions."""
     import torch
     inputs, _ = build_inputs(model_tag, proc, image, text)
+    # with device_map='auto' the model may be sharded; the first parameter's
+    # device is where the inputs must go
     device = next(model.parameters()).device
     inputs = {k: (v.to(device) if hasattr(v, 'to') else v) for k, v in inputs.items()}
 
     with torch.no_grad():
         out = model(**inputs, output_hidden_states=True, return_dict=True)
 
+    # out.hidden_states is a tuple of (1, seq, d) tensors, one per layer, index 0
+    # = embedding output. Gather the requested positions from each requested layer
+    # and stack -> (n_layers, n_positions, d); float16 to keep the cache small.
     idx = locate_positions(inputs['input_ids'][0], eot_id)
     take = [idx[p] for p in pos_names]
     stack = torch.stack([out.hidden_states[l][0, take, :] for l in layers], dim=0)
     return stack.float().cpu().numpy().astype(np.float16), idx
 
 
+# ============================================================================
+# NOTE (review): --shuffle-images is a CONTROL that pairs each question with
+# another image of the same category. The self-match fix (perm[i] =
+# perm[i+1]) makes perm a non-permutation: that image is then used twice and
+# one image not at all. Harmless for a control, but perm is no longer a
+# bijection. --limit N is a smoke test; --layer-stride controls cache size.
+# ============================================================================
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--model', default='qwen2', choices=list(MODEL_PATHS))
@@ -134,9 +188,12 @@ def main():
     eot_id = end_of_turn_id(args.model, tok)
     print(f'end-of-turn token id {eot_id} -> {tok.convert_ids_to_tokens([eot_id])}')
 
+    # +1 because hidden_states also contains the embedding layer at index 0;
+    # VLMs keep the LLM config under text_config, plain LLMs at the top level
     n_layers_total = model.config.text_config.num_hidden_layers + 1 \
         if hasattr(model.config, 'text_config') else \
         model.config.num_hidden_layers + 1
+    # keep every stride-th layer, and always the last one (what CCS normally uses)
     layers = list(range(0, n_layers_total, args.layer_stride))
     if layers[-1] != n_layers_total - 1:
         layers.append(n_layers_total - 1)
@@ -152,14 +209,21 @@ def main():
             pairs = pairs[:args.limit]
 
         if args.shuffle_images:
+            # control: give each question a DIFFERENT image of the same category. perm[i]
+            # is the source item whose image question i receives
             rng = np.random.default_rng(args.shuffle_seed)
             imgs = [p['image_id'] for p in pairs]
             perm = rng.permutation(len(imgs))
             for i, j in enumerate(perm):
+                # if item i would get its own image back, take the next slot's instead.
+                # (This copies an index, so perm stops being a permutation: one image is then
+                # used twice and another not at all. Acceptable for a control.)
                 if imgs[j] == imgs[i]:
                     perm[i] = perm[(i + 1) % len(perm)]
             pairs = [{**p, 'image_id': imgs[perm[i]]} for i, p in enumerate(pairs)]
 
+        # P/N: per-item (layers, positions, d) arrays for the Yes / No statement;
+        # y: label; iid/qid: ids stored so later splits can group by image
         P, N, y, iid, qid, failures, pos_log = [], [], [], [], [], [], None
         for i, p in enumerate(pairs):
             path = find_image(p['image_id'], args.image_dirs)
@@ -169,10 +233,12 @@ def main():
             try:
                 image = Image.open(path).convert('RGB')
                 q = p['question'].rstrip('?')
+                # the two contrast statements, same image, same prompt shape as vision_ccs.py
                 ph, idx = extract_one(model, proc, args.model, image, f'{q}? Yes',
                                       layers, args.positions, eot_id)
                 nh, _ = extract_one(model, proc, args.model, image, f'{q}? No',
                                     layers, args.positions, eot_id)
+                # print the position map once so the log shows which indices were pooled
                 if pos_log is None:
                     pos_log = idx
                     print(f'  first item position map: {idx}')
@@ -190,6 +256,8 @@ def main():
         gc.collect()
 
         suffix = '_shuffled' if args.shuffle_images else ''
+        # np.stack(P) -> (n, layers, positions, d). layers/positions arrays are saved
+        # alongside so layer_sweep can map indices back to layer numbers / names
         f = out_dir / f'hs_{args.model}_{category}{suffix}.npz'
         np.savez(f,
                  pos_hiddens=np.stack(P), neg_hiddens=np.stack(N),
@@ -201,6 +269,7 @@ def main():
         print(f'  shape {shape} (n, layers, positions, d)  '
               f'{f.stat().st_size / 1e9:.2f} GB')
         print(f'  kept {len(P)}/{len(pairs)}   failed {len(failures)}')
+        # tally failures by exception class (text before the first ':')
         by_reason = {}
         for _, why in failures:
             by_reason[why.split(':')[0]] = by_reason.get(why.split(':')[0], 0) + 1

@@ -1,5 +1,11 @@
 """Unit tests for reanalysis.py."""
 
+# ============================================================================
+# NOTE (review): ROLE OF THIS FILE
+# Self-contained checks (no pytest). Run from vision_ccs/ with
+# `python test_reanalysis.py`; needs vqav2_mapped.json in the cwd and numpy.
+# Tests needing torch/sklearn are absent: train_* functions are untested.
+# ============================================================================
 import json
 import sys
 import tempfile
@@ -16,10 +22,17 @@ _ok = True
 
 def check(name, cond, extra=''):
     global _ok
+    # minimal test runner: print PASS/FAIL, remember any failure in the global _ok
     print(('PASS ' if cond else 'FAIL ') + name + (f'  {extra}' if extra else ''))
     _ok = _ok and bool(cond)
 
 
+# ============================================================================
+# NOTE (review): a verbatim copy of the balanced sampler in
+# vision_ccs.load_vqa_data, used as the reference that build_pairs(mode='ccs')
+# must reproduce order-for-order. If vision_ccs.py's sampler changes, update
+# this copy or the test silently tests the wrong thing.
+# ============================================================================
 def _martin_load(cat, seed=42):
     vqa = json.load(open(VQA))[cat]
     n_samples = len(vqa)
@@ -55,6 +68,7 @@ def test_alignment():
     ids, st = R.align_pairs(pairs, lab[:500])
     check('align prefix', st == 'prefix' and len(ids) == 500)
 
+    # flip one label so the checksum comparison must reject the alignment
     bad = lab[:500].copy()
     bad[0] = 1 - bad[0]
     ids, st = R.align_pairs(pairs, bad)
@@ -66,7 +80,9 @@ def test_auroc():
     check('auroc inverted', R.auroc(np.array([.9, .8, .2, .1]), [0, 0, 1, 1]) == 0.0)
     check('auroc all ties = 0.5', R.auroc(np.array([.5] * 4), [0, 0, 1, 1]) == 0.5)
     a = R.auroc(np.array([0.1, 0.4, 0.4, 0.6, 0.9]), [0, 0, 1, 1, 1])
+    # hand-computed: 2 negatives x 3 positives = 6 pairs; the .4 vs .4 tie counts 1/2
     check('auroc tie-corrected', abs(a - (1 + 0.5 + 1 + 1 + 1 + 1) / 6) < 1e-12, f'{a:.4f}')
+    # x != x is only true for NaN, hence this is a 'returns nan' check
     check('auroc single-class -> nan', R.auroc(np.array([.1, .2]), [1, 1]) != R.auroc(np.array([.1, .2]), [1, 1]))
 
 
@@ -78,6 +94,7 @@ def test_splits():
     check('split deterministic', np.array_equal(R.make_split(n, 42, 0.6)[0], tr))
     check('split seed-sensitive', not np.array_equal(R.make_split(n, 7, 0.6)[0], tr))
 
+    # 200 images x 5 questions each -> grouped split must keep an image on one side
     g = np.repeat(np.arange(200), 5)
     tr, te = R.make_split(len(g), 1, 0.6, groups=g)
     check('group split: zero image leakage', len(set(g[tr]) & set(g[te])) == 0)
@@ -88,6 +105,7 @@ def test_splits():
 
 def test_normalize():
     rng = np.random.default_rng(0)
+    # mean 3, std 2 so that centring and scaling are both visible in the checks
     ptr, ntr, pte, nte = (rng.normal(3, 2, (60, 8)).astype('f4') for _ in range(4))
 
     a, b, c, d = R.normalize(ptr, ntr, pte, nte, 'per_split', True)
@@ -127,6 +145,7 @@ def test_pca_control():
     _, W = R._randomized_pca(Z, 20, seed=1)
     Zc = Z - Z.mean(0, keepdims=True)
     _, _, Vt = np.linalg.svd(Zc, full_matrices=False)
+    # principal angles: singular values of W^T V close to 1 <=> same subspace
     sv = np.linalg.svd(W.T @ Vt[:20].T, compute_uv=False)
     check('randomized PCA recovers subspace', sv.min() > 0.999, f'min sv={sv.min():.6f}')
 
@@ -134,6 +153,7 @@ def test_pca_control():
     a, b, c, d = R.pca_reduce(ptr, ntr, pte, nte, 50)
     check('pca_reduce shapes', all(x.shape == (120, 50) for x in (a, b, c, d)))
     check('pca_reduce dtype float32', all(x.dtype == np.float32 for x in (a, b, c, d)))
+    # shifting TEST must not change the TRAIN projection if PCA was fit on train only
     a2, _, _, _ = R.pca_reduce(ptr, ntr, pte + 99.0, nte, 50)
     check('pca_reduce is fit on train only', np.abs(a - a2).max() == 0.0)
 
@@ -172,6 +192,7 @@ def test_score_report():
 def test_locate_positions():
     from extract import locate_positions
     # Qwen2 case: [... text, Yes, <|im_end|>, \n]
+    # 151645 = <|im_end|> id in the Qwen2 tokenizer, 198 = '\n'; 9999 stands for 'Yes'
     ids_qwen = np.array([10, 20, 30, 9999, 151645, 198])
     m_qwen = locate_positions(ids_qwen, 151645)
     check('locate_positions Qwen: answer < final',

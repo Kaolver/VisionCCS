@@ -1,5 +1,13 @@
 """Compute zero-shot Yes/No baseline logits and accuracy."""
 
+# ============================================================================
+# NOTE (review): ROLE OF THIS FILE
+# Zero-shot Yes/No baseline (Burns et al. Sec 3.1 '0-shot' / 'calibrated'),
+# which vision_ccs.py does not have. It scores the model's own next-token
+# logits for Yes vs No at the generation position. Output zeroshot_<model>_
+# <cat>.npz is row-aligned with reanalysis.build_pairs(mode='ccs') minus the
+# same missing-image skips, which is what compare_zeroshot.py relies on.
+# ============================================================================
 import argparse
 import gc
 import json
@@ -10,6 +18,8 @@ import numpy as np
 
 from reanalysis import build_pairs, CATEGORIES
 
+# several surface forms because tokenizers distinguish 'Yes' from ' Yes' (leading
+# space) and casing; each form may start with a different token id
 YES_FORMS = ['Yes', ' Yes', 'yes', ' yes', 'YES']
 NO_FORMS = ['No', ' No', 'no', ' no', 'NO']
 
@@ -18,9 +28,12 @@ def _first_token_ids(tokenizer, forms):
     """Ids of the first token of each surface form, deduplicated."""
     ids = []
     for f in forms:
+        # only the FIRST token of each form matters: the model's next-token distribution
+        # is over single tokens, so 'Yes' is scored by the id its first sub-token gets
         enc = tokenizer.encode(f, add_special_tokens=False)
         if enc:
             ids.append(enc[0])
+    # deduplicate: ' Yes' and 'Yes' may map to the same first id in some tokenizers
     return sorted(set(ids))
 
 
@@ -62,15 +75,25 @@ def load_model(model_tag, cfg_paths, device):
     return model, proc
 
 
+# ============================================================================
+# NOTE POTENTIAL MISMATCH (by design): this prompt ENDS with the generation
+# prompt ('\nASSISTANT:' / add_generation_prompt=True) so the model answers,
+# whereas CCS extraction ends with the statement + EOS. --no-instruction drops
+# the extra 'Answer yes or no.' hint that CCS never sees.
+# ============================================================================
 def build_inputs(model_tag, proc, image, question, instruction=True):
     """Build input prompt stopping before the answer with generation prompt on."""
+    # normalise punctuation: exactly one trailing '?' whatever the dataset had
     q = question.rstrip('?') + '?'
     # CCS extraction sees a bare statement ("Is there a dog? Yes"). Giving
     # zero-shot an extra "Answer yes or no." task hint that CCS never gets is an
     # asymmetry favouring zero-shot, so it is switchable and both are reported.
+    # optional task hint; CCS extraction never sees it, hence the --no-instruction
+    # switch so both variants can be reported
     if instruction:
         q = f'{q} Answer yes or no.'
     if model_tag == 'llava':
+        # ends with the assistant cue so the NEXT token is the model's answer
         prompt = f'USER: <image>\n{q}\nASSISTANT:'
         return proc(images=image, text=prompt, return_tensors='pt')
 
@@ -83,6 +106,11 @@ def build_inputs(model_tag, proc, image, question, instruction=True):
     return proc(text=[text], images=imgs, videos=vids, padding=True, return_tensors='pt')
 
 
+# ============================================================================
+# NOTE (review): rank-based calibration: the top half of items by (yes - no)
+# logit margin are predicted 'yes', so exactly 50% are yes regardless of the
+# model's bias. Uses a stable sort so bf16 ties resolve deterministically.
+# ============================================================================
 def calibrate(margin):
     """Burns' calibrated zero-shot, rank-based: the top half of items by margin
     are predicted yes, so the prediction rate is exactly 50/50 regardless of the
@@ -93,10 +121,15 @@ def calibrate(margin):
     at the median a `>` threshold collapses to predicting one class for
     everything. Ranking breaks ties deterministically and cannot degenerate.
     """
+    # rank-based 50/50 rule, step by step:
     margin = np.asarray(margin, dtype=float)
     n = len(margin)
+    # mergesort is STABLE: equal margins keep their original order, so ties (common
+    # with bf16 logits) are broken deterministically instead of arbitrarily
     order = np.argsort(margin, kind='mergesort')
     preds = np.zeros(n, dtype=int)
+    # order[...] lists items from smallest to largest margin; the last n//2 entries
+    # are the n//2 largest margins -> predicted yes. For odd n that is floor(n/2).
     preds[order[n - n // 2:]] = 1          # top half -> yes
     return preds
 
@@ -105,9 +138,15 @@ def calibrated_accuracy(margin, labels):
     """Calibrated zero-shot accuracy. Also returns the median margin, which is
     reported only as a descriptive statistic."""
     preds = calibrate(margin)
+    # the median is reported for reading only; the decision above did not use it
     return float((preds == np.asarray(labels)).mean()), float(np.median(margin))
 
 
+# ============================================================================
+# NOTE (review): per item, yes_logit = max over first-token ids of the YES
+# surface forms, no_logit likewise; raw accuracy thresholds margin > 0,
+# calibrated accuracy uses calibrate(). Skipped items are NOT recorded by id.
+# ============================================================================
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--model', default='qwen2', choices=['llava', 'qwen2', 'qwen2_5'])
@@ -137,10 +176,12 @@ def main():
 
     model, proc = load_model(args.model, paths, device)
     tok = proc.tokenizer
+    # token ids whose logits will be compared
     yes_ids = _first_token_ids(tok, YES_FORMS)
     no_ids = _first_token_ids(tok, NO_FORMS)
     print(f'yes token ids {yes_ids} -> {tok.convert_ids_to_tokens(yes_ids)}')
     print(f'no  token ids {no_ids} -> {tok.convert_ids_to_tokens(no_ids)}')
+    # sanity: both sets non-empty and disjoint, otherwise yes/no cannot be separated
     if not yes_ids or not no_ids or set(yes_ids) & set(no_ids):
         print('!! degenerate answer-token ids; aborting'); return 1
 
@@ -165,7 +206,10 @@ def main():
                 inputs = {k: (v.to(device) if hasattr(v, 'to') else v)
                           for k, v in inputs.items()}
                 with torch.no_grad():
+                    # logits[0, -1] = next-token scores at the LAST prompt position (after
+                    # 'ASSISTANT:'), i.e. the distribution the model would sample its answer from
                     logits = model(**inputs).logits[0, -1].float().cpu().numpy()
+                # score of 'yes' = best-scoring yes surface form (max over its token ids)
                 yl.append(float(logits[yes_ids].max()))
                 nl.append(float(logits[no_ids].max()))
                 labels.append(p['label'])
@@ -182,9 +226,14 @@ def main():
         if len(labels) == 0:
             print(f'{category}: nothing extracted'); continue
 
+        # positive margin = model prefers 'Yes'
         margin = yl - nl
+        # raw accuracy: threshold at 0 (the model's own bias is left in)
         raw = float(((margin > 0).astype(int) == labels).mean())
+        # calibrated accuracy: threshold moved so exactly half are predicted yes
+        # (Burns et al. Sec 3.1, 'calibrated zero-shot')
         cal, thr = calibrated_accuracy(margin, labels)
+        # how often the UNcalibrated model says yes: reveals its yes/no bias
         yes_rate = float((margin > 0).mean())
 
         f = out_dir / f'zeroshot_{args.model}{args.tag}_{category}.npz'

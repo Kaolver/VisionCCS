@@ -1,12 +1,29 @@
 """Compare label-free restart selection criteria."""
 
+# ============================================================================
+# NOTE (review): ROLE OF THIS FILE
+# Post-hoc study of restart-selection rules. Reads the per-restart records
+# that reanalysis.train_ccs stores (loss, consistency_err, confidence,
+# saturated, val_* variants, test_acc_flipped) and asks: which label-free rule
+# would have picked the best restart? Requires reanalysis.py to have been run
+# WITH labels so test_acc_flipped is present; the oracle row uses labels and
+# is a reference, not a method.
+# ============================================================================
 import argparse
 import json
 import sys
 
 import numpy as np
 
+# ============================================================================
+# NOTE (review): (record key, direction). Each rule picks argmin(direction *
+# value): +1 = smaller is better (loss, consistency error), -1 = larger is
+# better (saturation). 'val_*' keys come from the held-out train slice
+# (inductive); un-prefixed keys are measured on test inputs (transductive).
+# ============================================================================
 CRITERIA = {
+    # format: rule name -> (key in the per-restart record, direction).
+    # direction +1: pick the SMALLEST value; -1: pick the LARGEST value
     'loss (Burns)':      ('loss', +1),
     # held-out slice of TRAIN: label-free AND inductive (never sees test)
     'val_consistency':   ('val_consistency_err', +1),
@@ -27,19 +44,27 @@ def load_runs(path):
     out = []
     for cell, c in res.get('cells', {}).items():
         for run, v in c.get('runs', {}).items():
+            # per-restart records exist only if reanalysis.py stored them (not layer_sweep)
             r = v.get('ccs', {}).get('restarts') or []
+            # accuracy per restart is needed to grade the rules -> requires labels at run time
             if r and 'test_acc_flipped' in r[0]:
                 out.append((cell, run, r))
     return out
 
 
+# ============================================================================
+# NOTE (review): index of the restart a rule chooses; ties -> first (argmin).
+# ============================================================================
 def select(restarts, key, direction):
     """Index of the restart this criterion would choose."""
+    # multiplying by direction turns 'pick largest' into 'pick smallest' so one
+    # argmin serves both; ties -> lowest index
     vals = np.array([r[key] for r in restarts], dtype=float) * direction
     return int(np.argmin(vals))
 
 
 def _rule_picks(runs, key, direction):
+    # for every run: accuracy of the restart THIS rule would have chosen
     return np.array([rs[select(rs, key, direction)]['test_acc_flipped']
                      for _, _, rs in runs])
 
@@ -52,6 +77,7 @@ def print_by_cell(runs):
     from collections import OrderedDict
     groups = OrderedDict()
     for cell, run, rs in runs:
+        # group runs by (cell, split kind); the seeds inside a group give mean +/- std
         groups.setdefault((cell, run.split('/')[0]), []).append((cell, run, rs))
 
     print('\nPer-cell breakdown (mean +/- std over seeds):')
@@ -62,6 +88,7 @@ def print_by_cell(runs):
     for (cell, split), rr in groups.items():
         burns = _rule_picks(rr, 'loss', +1)
         cons = _rule_picks(rr, 'consistency_err', +1)
+        # oracle = best restart by TEST accuracy (uses labels; an upper bound, not a rule)
         orac = np.array([max(r['test_acc_flipped'] for r in rs) for _, _, rs in rr])
         print(f"  {cell:30s} {split:10s} {burns.mean():6.1%}+/-{burns.std():5.1%} "
               f"{cons.mean():6.1%}+/-{cons.std():5.1%} {orac.mean():7.1%} "
@@ -86,7 +113,9 @@ def main():
     n_restarts = len(runs[0][2])
     print(f'{len(runs)} runs x {n_restarts} restarts = {len(runs)*n_restarts} probes\n')
 
+    # flatten: one entry per (run, restart) -> every probe that was ever trained
     allr = [r for _, _, rs in runs for r in rs]
+    # correlation of each criterion with accuracy, pooled over all probes
     acc_all = np.array([r['test_acc_flipped'] for r in allr])
     print('Correlation with test accuracy (pooled over every restart):')
     seen = set()
@@ -97,12 +126,17 @@ def main():
         name = key
         v = np.array([r[key] for r in allr], dtype=float)
         if key == 'loss':
+            # losses span many orders of magnitude (1e-6 .. 1e-1); correlate the LOG so a
+            # few near-zero losses do not dominate. maximum(..) guards log(0).
             v = np.log(np.maximum(v, 1e-12))
             name = name + ' [log]'
+        # Pearson r between criterion and accuracy; nan if the criterion is constant
         rho = np.corrcoef(v, acc_all)[0, 1] if v.std() > 0 else float('nan')
         print(f'  {name:22s} {rho:+.3f}')
 
     print('\nAccuracy of the restart each rule selects (mean over runs):')
+    # three reference rows per run: best possible, worst possible, and the EXPECTED
+    # accuracy of picking a restart at random (= mean over the ten restarts)
     oracle = np.array([max(r['test_acc_flipped'] for r in rs) for _, _, rs in runs])
     worst = np.array([min(r['test_acc_flipped'] for r in rs) for _, _, rs in runs])
     rand = np.array([np.mean([r['test_acc_flipped'] for r in rs]) for _, _, rs in runs])
@@ -118,6 +152,8 @@ def main():
     if args.combine:
         picked = []
         for _, _, rs in runs:
+            # z-score each criterion WITHIN the run so loss and consistency are on a
+            # comparable scale before adding them; +1e-12 avoids division by zero
             def z(k):
                 v = np.array([r[k] for r in rs], dtype=float)
                 return (v - v.mean()) / (v.std() + 1e-12)
@@ -125,7 +161,9 @@ def main():
             picked.append(rs[int(np.argmin(score))]['test_acc_flipped'])
         rows.append(('loss+consistency (z)', np.array(picked)))
 
+    # every rule is reported relative to the original lowest-loss rule
     baseline = dict(rows)['loss (Burns)']
+    # regret = oracle accuracy - accuracy of the restart the rule picked (>= 0)
     print(f"  {'rule':24s} {'mean':>7s} {'std':>7s} {'regret':>8s} {'vs Burns':>9s}")
     print('  ' + '-' * 60)
     for name, picked in sorted(rows, key=lambda t: -t[1].mean()):
@@ -143,6 +181,8 @@ def main():
         print_by_cell(runs)
 
     print('\nWorst single run (largest gap between best and selected restart):')
+    # worst case for the lowest-loss rule: the run where it left the most accuracy
+    # on the table; its ten restarts are then listed sorted by loss
     gaps = [(max(r['test_acc_flipped'] for r in rs)
              - rs[select(rs, 'loss', +1)]['test_acc_flipped'], cell, run, rs)
             for cell, run, rs in runs]
