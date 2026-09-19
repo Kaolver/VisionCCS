@@ -4,7 +4,7 @@ Supervised NON-LINEAR (MLP) probe baseline.
 the same MLP probe
 architecture, but trained with a supervised BCE loss on the
 ground-truth labels instead of the unsupervised CCS loss, like the
-supervised linear probe in revised_supervised_vision.py, whose training
+supervised linear probe in linear_supervised.py, whose training
 procedure is reused here unchanged (only the probe_factory differs).
 
 Data loading and hidden-state extraction are reused from vision_ccs.py, hence

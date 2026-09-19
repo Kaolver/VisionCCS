@@ -33,9 +33,9 @@ from linear_ccs import (
 CONFIG = {
     **VISION_CCS_CONFIG,
 
-    # 50/50 split, matching the original CCS notebook (see the note in
-    # revised_supervised_vision.py: vision_ccs.py itself currently uses the
-    # paper's 60/40 — set its 'train_split' to 0.5 to make all runs identical).
+    # 60/40 split, matching linear_ccs.py and the CCS paper (Sec 3.1), so all
+    # pipelines train and evaluate on identical example sets. (The original
+    # notebook used 50/50; set this and linear_ccs.py to 0.5 to reproduce it.)
     'train_split': 0.6,
 
     # Hidden layer width of the MLP probe - 100 as in the original

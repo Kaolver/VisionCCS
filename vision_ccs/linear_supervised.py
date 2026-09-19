@@ -1,13 +1,12 @@
 """
-REVISED version of supervised_vision.py — aligned with the original CCS project
-(ccs/CCS.ipynb + the CCS paper) and with the revised vision_ccs.py.
+Supervised linear baseline — aligned with the original CCS project
+(ccs/CCS.ipynb + the CCS paper) and with linear_ccs.py.
 
-The original supervised_vision.py is left untouched (on request); every
-deviation from it is marked with a clearly visible comment block starting with
-"CHANGED". The guiding principle: a supervised baseline is only a valid
-ceiling/comparison for CCS if it runs on EXACTLY the same data and the same
-hidden states — so everything data-related is imported from vision_ccs.py
-instead of being duplicated here.
+Comment blocks starting with "CHANGED" mark each deviation from the project's
+earlier supervised_vision.py. The guiding principle: a supervised baseline is
+only a valid ceiling/comparison for CCS if it runs on EXACTLY the same data and
+the same hidden states — so everything data-related is imported from
+linear_ccs.py instead of being duplicated here.
 """
 
 import numpy as np
@@ -48,8 +47,8 @@ CONFIG = {
     # CCS paper (Sec 3.1). Because both pipelines use the same value and the
     # same seeded split, CCS and this supervised baseline train and evaluate
     # on identical example sets -- which is what makes the comparison valid.
-    # (The original CCS notebook used 50/50; revised_supervised_vision.py is
-    # that variant and is no longer imported by anything.)
+    # (The original CCS notebook used 50/50; set this to 0.5 in BOTH this file
+    # and linear_ccs.py to reproduce that variant.)
     # ==========================================================================
     'train_split': 0.6,
 }
