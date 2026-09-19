@@ -36,7 +36,7 @@ CONFIG = {
     # 50/50 split, matching the original CCS notebook (see the note in
     # revised_supervised_vision.py: vision_ccs.py itself currently uses the
     # paper's 60/40 — set its 'train_split' to 0.5 to make all runs identical).
-    'train_split': 0.5,
+    'train_split': 0.6,
 
     # Hidden layer width of the MLP probe - 100 as in the original
     # notebook's MLPProbe.

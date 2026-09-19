@@ -34,6 +34,11 @@ else
     source venv/bin/activate
 fi
 
+if [ -z "$VIRTUAL_ENV" ]; then
+    echo "ERROR: venv was not activated; refusing to run against system python." >&2
+    exit 1
+fi
+
 if ! python -c "import torch" 2>/dev/null; then
     echo "ERROR: $(which python) cannot import torch." >&2
     exit 1

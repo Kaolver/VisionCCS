@@ -14,7 +14,19 @@
 # Runs on a MIG slice (1/7 A100, ~10GB). If a job dies with CUDA OOM, lower
 # 'batch_size' in linear_ccs.py CONFIG (now 8) rather than raising --mem:
 # --mem is host RAM and does not change the GPU slice.
-source "$(dirname "$0")/_common.sh"
+# NOTE: SLURM copies this script to a spool dir, so $(dirname "$0") is NOT the
+# submit dir. Resolve _common.sh explicitly.
+for D in "$SLURM_SUBMIT_DIR" "$HOME/VisionCCS/vision_ccs" "$(dirname "$0")" .; do
+    if [ -n "$D" ] && [ -f "$D/_common.sh" ]; then
+        source "$D/_common.sh"
+        found_common=1
+        break
+    fi
+done
+if [ -z "$found_common" ]; then
+    echo "ERROR: _common.sh not found (looked in SLURM_SUBMIT_DIR, ~/VisionCCS/vision_ccs)" >&2
+    exit 1
+fi
 
 echo "=== running nonlinear_ccs.py ==="
 PYTHONPATH="" python nonlinear_ccs.py
