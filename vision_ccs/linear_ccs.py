@@ -29,16 +29,16 @@ CONFIG = {
     'n_samples_object_detection': distribution.get('object_detection', 0),
     'n_samples_attribute_recognition': distribution.get('attribute_recognition', 0),
     'n_samples_spatial_recognition': distribution.get('spatial_recognition', 0),
-    'batch_size': 40,
+    'batch_size': 8,
     
     # Cache control
-    'use_cache': False,
+    'use_cache': True,
     
     # Paths
     'vqa_json': './vqav2_mapped.json',
     'image_dirs': [
         '/scratch-nvme/ml-datasets/coco/train/data',
-        '/scratch-nvme/ml-datasets/coco/val/data',
+        '/scratch-nvme/ml-datasets/coco/validation/data',
     ],
     'cache_dir': './hidden_states_cache_final',
     'categories': ['object_detection', 'attribute_recognition', 'spatial_recognition'],

@@ -22,7 +22,7 @@ import torch.optim as optim
 from sklearn.model_selection import train_test_split
 
 # Reuse the shared (revised, CCS-aligned) pipeline pieces
-from vision_ccs import (
+from linear_ccs import (
     CONFIG as VISION_CCS_CONFIG,
     load_vqa_data,
     extract_in_batches,

@@ -32,7 +32,7 @@ from sklearn.model_selection import train_test_split
 # (Also unified: the old file reused its Qwen2 extraction function for
 # Qwen2.5; vision_ccs.py has a dedicated, equivalent function per model.)
 # ==============================================================================
-from vision_ccs import (
+from linear_ccs import (
     CONFIG as VISION_CCS_CONFIG,
     load_vqa_data,
     extract_in_batches,
@@ -44,13 +44,12 @@ CONFIG = {
 
 
     # ==========================================================================
-    # CHANGED (vs the revised vision_ccs.py; same value as supervised_vision.py):
-    # the split stays 50/50, matching the original CCS notebook ("let's create
-    # a simple 50/50 train split"). NOTE: vision_ccs.py currently uses the
-    # paper's 60/40 split ('train_split': 0.6); to make the CCS run use the
-    # notebook's 50/50 split too (and thereby identical train/test halves to
-    # this file), set 'train_split': 0.5 there — a one-value change, not made
-    # here on request.
+    # The split is 60/40, matching linear_ccs.py ('train_split': 0.6) and the
+    # CCS paper (Sec 3.1). Because both pipelines use the same value and the
+    # same seeded split, CCS and this supervised baseline train and evaluate
+    # on identical example sets -- which is what makes the comparison valid.
+    # (The original CCS notebook used 50/50; revised_supervised_vision.py is
+    # that variant and is no longer imported by anything.)
     # ==========================================================================
     'train_split': 0.6,
 }

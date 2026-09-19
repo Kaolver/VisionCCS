@@ -14,7 +14,7 @@ this baseline runs on the same data and hidden states.
 import numpy as np
 
 # Reuse the shared (revised, CCS-aligned) pipeline pieces
-from vision_ccs import (
+from linear_ccs import (
     load_vqa_data,
     extract_in_batches,
 )
@@ -22,13 +22,13 @@ from vision_ccs import (
 # Reuse the revised supervised training procedure (seeded shared split,
 # CCS-style normalization, same training budget as the CCS probe) and its
 # config (which already sets the 50/50 split)
-from revised_supervised_vision import (
+from linear_supervised import (
     CONFIG as SUPERVISED_CONFIG,
     train_supervised_probe,
 )
 
 # Reuse the non-linear probe class of the unsupervised pipeline
-from unsupervised_nonlinear import MLPProbe
+from nonlinear_ccs import MLPProbe
 
 
 CONFIG = {
