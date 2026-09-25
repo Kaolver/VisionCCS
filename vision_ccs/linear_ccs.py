@@ -22,26 +22,50 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 
 
-dataset = json.load(open('vqav2_mapped.json', 'r'))
-distribution = {category: len(items) for category, items in dataset.items()}
+# ==============================================================================
+# Datasets. Both are yes/no questions over COCO images, which Snellius provides
+# at the shared paths in CONFIG['image_dirs'], so no images are uploaded.
+#
+# - vqa2: ./vqav2_mapped.json, one dict keyed by category, items with
+#   {question, answer, image_id (int)}. Categories are the question types.
+# - pope: ./pope/coco_pope_{split}.json (RUCAIBox/POPE, "output/coco"), JSONL
+#   with {question_id, image, text, label}. Each split is 3000 questions,
+#   exactly 1500 yes / 1500 no, over 500 val2014 images. The three splits
+#   (random / popular / adversarial negative sampling) are treated as the
+#   categories, so every stage runs one probe per split, as for vqa2.
+#
+# Switch with CONFIG['dataset'] or, without editing this file, per job:
+#     VISIONCCS_DATASET=pope sbatch run_linear_ccs.sh
+# ==============================================================================
+DATASETS = {
+    'vqa2': {
+        'path': './vqav2_mapped.json',
+        'categories': ['object_detection', 'attribute_recognition', 'spatial_recognition'],
+    },
+    'pope': {
+        'path': './pope/coco_pope_{category}.json',
+        'categories': ['random', 'popular', 'adversarial'],
+    },
+}
+
+DATASET = os.environ.get('VISIONCCS_DATASET', 'vqa2')
+if DATASET not in DATASETS:
+    raise ValueError(f"VISIONCCS_DATASET={DATASET!r}; expected one of {list(DATASETS)}")
 
 CONFIG = {
-    'n_samples_object_detection': distribution.get('object_detection', 0),
-    'n_samples_attribute_recognition': distribution.get('attribute_recognition', 0),
-    'n_samples_spatial_recognition': distribution.get('spatial_recognition', 0),
+    'dataset': DATASET,
     'batch_size': 8,
     
     # Cache control
     'use_cache': True,
     
     # Paths
-    'vqa_json': './vqav2_mapped.json',
     'image_dirs': [
         '/scratch-nvme/ml-datasets/coco/train/data',
         '/scratch-nvme/ml-datasets/coco/validation/data',
     ],
     'cache_dir': './hidden_states_cache_final',
-    'categories': ['object_detection', 'attribute_recognition', 'spatial_recognition'],
+    'categories': DATASETS[DATASET]['categories'],
     
     # Model
     'model_llava': 'llava-hf/llava-1.5-7b-hf',
@@ -98,13 +122,48 @@ CONFIG = {
 }
 
 
+def load_dataset_items(config, category):
+    """Read one category of the chosen dataset as {question, answer, image_id}.
+
+    image_id is the bare COCO filename ("000000310196.jpg"), which is how the
+    Snellius COCO dirs are laid out. POPE names images "COCO_val2014_<id>.jpg";
+    val2014 is a subset of train2017 + val2017, so stripping the prefix is
+    enough for find_image to locate them.
+    """
+    name = config['dataset']
+    path = Path(DATASETS[name]['path'].format(category=category))
+    if name == 'vqa2':
+        with open(path, 'r') as f:
+            items = json.load(f)[category]
+        return [{
+            'question': it['question'],
+            'answer': it['answer'],
+            'image_id': it['image_id'],
+        } for it in items]
+    if name == 'pope':
+        items = []
+        with open(path, 'r') as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                it = json.loads(line)
+                items.append({
+                    'question': it['text'],
+                    'answer': it['label'],
+                    'image_id': it['image'].split('_')[-1],
+                })
+        return items
+    raise ValueError(f"Unknown dataset {name!r}")
+
+
 def load_vqa_data(config, category):
-    """Load data for a specific category from the categorized VQA JSON."""
-    data_path = Path(config['vqa_json'])
-    with open(data_path, 'r') as f:
-        all_data = json.load(f)
-        vqa_data = all_data[category]
-    
+    """Load one category of the chosen dataset as CCS contrast pairs.
+
+    Kept under its original name: linear_supervised.py, nonlinear_ccs.py and
+    nonlinear_supervised.py import it.
+    """
+    vqa_data = load_dataset_items(config, category)
+
     n_samples_key = f'n_samples_{category}'
     n_samples = config.get(n_samples_key, len(vqa_data))
 
@@ -179,7 +238,8 @@ def extract_in_batches(pairs, config, category):
     # produced by the previous extraction code are incompatible and must not
     # be reused.
     # ==========================================================================
-    cache_file = cache_dir / f"cache_{category}_{n}_{model_tag}_ccs_aligned.npz"
+    dataset_tag = '' if config['dataset'] == 'vqa2' else f"{config['dataset']}_"
+    cache_file = cache_dir / f"cache_{dataset_tag}{category}_{n}_{model_tag}_ccs_aligned.npz"
     
     if config['use_cache'] and cache_file.exists():
         print("✓ Found cached hidden states!")
@@ -760,6 +820,7 @@ def main():
     model_key = f"model_{CONFIG['chosen_model']}"
     chosen_model_name = CONFIG[model_key]
     print(f"Model: {chosen_model_name}")
+    print(f"Dataset: {CONFIG['dataset']} (categories: {CONFIG['categories']})")
     
     all_results = {}
     
@@ -806,4 +867,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main()
