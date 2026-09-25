@@ -119,7 +119,7 @@ def train_supervised_classifier(neg_hs, pos_hs, y, config):
     print(f"  Hidden dim: {x_train.shape[1]}")
 
     # unchanged: exactly the notebook's classifier
-    lr = LogisticRegression(class_weight="balanced")
+    lr = LogisticRegression(class_weight="balanced", max_iter=1000)
     lr.fit(x_train, y_train)
 
     test_acc = lr.score(x_test, y_test)
