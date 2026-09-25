@@ -7,6 +7,26 @@ COCO is NOT uploaded. Both CONFIGs read it from the shared cluster path
 `/scratch-nvme/ml-datasets/coco/{train,val}/data`. Your home dir starting
 empty is correct.
 
+## Datasets
+
+Two question sets, both over COCO images already on the cluster:
+
+| Key    | Files                          | Categories (one probe each)          |
+|--------|--------------------------------|--------------------------------------|
+| `vqa2` | `vqav2_mapped.json`            | object_detection, attribute_recognition, spatial_recognition |
+| `pope` | `pope/coco_pope_{random,popular,adversarial}.json` | random, popular, adversarial (3000 q each, 1500 yes / 1500 no) |
+
+`vqa2` is the default. Switch per job with an environment variable — no file
+edits, no re-upload:
+
+    VISIONCCS_DATASET=pope sbatch run_linear_ccs.sh
+    VISIONCCS_DATASET=pope sbatch --dependency=afterok:<id> run_linear_supervised.sh
+
+The value is printed at the top of every `.out` (`dataset : pope`). The two
+datasets keep separate hidden-state caches (`cache_pope_*` vs `cache_*`), so
+stage 1 must be run once per dataset; stages 2-4 then reuse the matching
+cache. On int3, `export VISIONCCS_DATASET=pope` before `python linear_ccs.py`.
+
 ## Stages
 
 All four share one CONFIG and one cache (`./hidden_states_cache_final`).
@@ -34,12 +54,12 @@ Run stage 1 first and let it finish.
     rsync -avz \
       "$LOCAL"/linear_ccs.py "$LOCAL"/linear_supervised.py \
       "$LOCAL"/nonlinear_ccs.py "$LOCAL"/nonlinear_supervised.py \
-      "$LOCAL"/vqav2_mapped.json "$LOCAL"/requirements.txt \
+      "$LOCAL"/vqav2_mapped.json "$LOCAL"/pope "$LOCAL"/requirements.txt \
       "$LOCAL"/_common.sh "$LOCAL"/run_*.sh \
       USER@snellius.surf.nl:~/VisionCCS/vision_ccs/
 
 That is the complete runtime set: the four entrypoints plus the shared
-`_common.sh` and the dataset JSON.
+`_common.sh` and the dataset JSONs (`vqav2_mapped.json` and the `pope/` dir).
 
 ## 3a. Submit to the gpu_mig reservation
 
