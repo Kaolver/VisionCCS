@@ -2,9 +2,8 @@
 #   source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 # Locates the code, loads modules, prepares the venv, prints what ran.
 
-# linear_ccs.py reads the dataset JSON (./vqav2_mapped.json or ./pope/*.json)
-# relative to the working directory, so it must be the code directory for
-# every entrypoint.
+# linear_ccs.py reads ./vqav2_mapped.json at import time, so the working
+# directory must be the code directory for every entrypoint.
 if [ -n "$SLURM_SUBMIT_DIR" ] && [ -f "$SLURM_SUBMIT_DIR/linear_ccs.py" ]; then
     cd "$SLURM_SUBMIT_DIR" || exit 1
 elif [ -d "$HOME/VisionCCS/vision_ccs" ]; then
@@ -45,10 +44,6 @@ if ! python -c "import torch" 2>/dev/null; then
     exit 1
 fi
 
-# Dataset selection. Defaults to vqa2 inside linear_ccs.py; override per job
-# without editing any file:  VISIONCCS_DATASET=pope sbatch run_linear_ccs.sh
-# (sbatch exports the caller's environment to the job by default.)
-echo "dataset : ${VISIONCCS_DATASET:-vqa2}"
 echo "host    : $(hostname)"
 echo "workdir : $(pwd)"
 echo "python  : $(which python)"
