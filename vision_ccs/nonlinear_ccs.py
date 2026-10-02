@@ -225,6 +225,7 @@ def main():
     model_key = f"model_{CONFIG['chosen_model']}"
     chosen_model_name = CONFIG[model_key]
     print(f"Model: {chosen_model_name} — CCS with NON-LINEAR (MLP) probe")
+    print(f"Dataset: {CONFIG['dataset']} (categories: {CONFIG['categories']})")
 
     all_results = {}
 

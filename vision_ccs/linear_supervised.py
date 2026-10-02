@@ -248,6 +248,7 @@ def main():
     model_key = f"model_{CONFIG['chosen_model']}"
     chosen_model_name = CONFIG.get(model_key, CONFIG['chosen_model'])
     print(f"{chosen_model_name} + Contrast Pairs + Supervised Methods (revised)")
+    print(f"Dataset: {CONFIG['dataset']} (categories: {CONFIG['categories']})")
 
     all_results = {}
 

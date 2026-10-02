@@ -2,8 +2,9 @@
 #   source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 # Locates the code, loads modules, prepares the venv, prints what ran.
 
-# linear_ccs.py reads ./vqav2_mapped.json at import time, so the working
-# directory must be the code directory for every entrypoint.
+# linear_ccs.py reads the dataset files (./vqav2_mapped.json, ../vg/*.jsonl)
+# relative to the working directory, so it must be the code directory for
+# every entrypoint.
 if [ -n "$SLURM_SUBMIT_DIR" ] && [ -f "$SLURM_SUBMIT_DIR/linear_ccs.py" ]; then
     cd "$SLURM_SUBMIT_DIR" || exit 1
 elif [ -d "$HOME/VisionCCS/vision_ccs" ]; then

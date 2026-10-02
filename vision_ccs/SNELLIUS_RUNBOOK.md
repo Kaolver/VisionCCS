@@ -7,6 +7,26 @@ COCO is NOT uploaded. Both CONFIGs read it from the shared cluster path
 `/scratch-nvme/ml-datasets/coco/{train,val}/data`. Your home dir starting
 empty is correct.
 
+## Datasets
+
+Set `'dataset'` in the `linear_ccs.py` CONFIG (next to `'chosen_model'`); the
+other three scripts inherit it. Only the question files are uploaded — both
+datasets use the cluster's COCO images.
+
+| Key    | Files                          | Categories | Size used |
+|--------|--------------------------------|------------|-----------|
+| `vqa2` | `vision_ccs/vqav2_mapped.json` | object_detection, attribute_recognition, spatial_recognition | ~5.6k total (all, yes/no balanced) |
+| `vg`   | `vg/{train,val,test}.jsonl` (pooled) | object, attribute, spatial | 36k total (12k per category) |
+
+`'max_samples_per_category'` (default `None` = all) caps each category, e.g.
+`2000` for a quick run. VG categories are always trimmed to the same size.
+
+VG is ~6x the questions of vqa2, so uncapped stage-1 extraction takes ~6x as
+long and may exceed the 3 h `--time`. Either cap it or submit with a longer
+limit (`sbatch --time=12:00:00 run_linear_ccs.sh`). Stages 2-4 only read the
+cache and are unaffected. vg caches are named `cache_vg_*`, so they never
+clash with vqa2 caches.
+
 ## Stages
 
 All four share one CONFIG and one cache (`./hidden_states_cache_final`).
@@ -30,16 +50,18 @@ Run stage 1 first and let it finish.
 ## 2. Upload (from your laptop)
 
     LOCAL=/home/martin/Documents/Snellius/VisionCCS/VisionCCS/vision_ccs
-    ssh USER@snellius.surf.nl 'mkdir -p ~/VisionCCS/vision_ccs'
+    ssh USER@snellius.surf.nl 'mkdir -p ~/VisionCCS/vision_ccs ~/VisionCCS/vg'
     rsync -avz \
       "$LOCAL"/linear_ccs.py "$LOCAL"/linear_supervised.py \
       "$LOCAL"/nonlinear_ccs.py "$LOCAL"/nonlinear_supervised.py \
       "$LOCAL"/vqav2_mapped.json "$LOCAL"/requirements.txt \
       "$LOCAL"/_common.sh "$LOCAL"/run_*.sh \
       USER@snellius.surf.nl:~/VisionCCS/vision_ccs/
+    rsync -avz "$LOCAL"/../vg/*.jsonl USER@snellius.surf.nl:~/VisionCCS/vg/
 
 That is the complete runtime set: the four entrypoints plus the shared
-`_common.sh` and the dataset JSON.
+`_common.sh` and the dataset files. `vg/` sits next to `vision_ccs/`, as
+locally, because the code reads it as `../vg/`.
 
 ## 3a. Submit to the gpu_mig reservation
 

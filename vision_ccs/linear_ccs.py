@@ -22,26 +22,52 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 
 
-dataset = json.load(open('vqav2_mapped.json', 'r'))
-distribution = {category: len(items) for category, items in dataset.items()}
+# ==============================================================================
+# Datasets. Both are yes/no questions over COCO images, which Snellius provides
+# at the shared paths in CONFIG['image_dirs'], so only the question files are
+# uploaded. Pick one with CONFIG['dataset'].
+#
+# - vqa2: ./vqav2_mapped.json, one dict keyed by category; every item of the
+#   category is used.
+# - vg:   ../vg/{train,val,test}.jsonl (Visual Genome questions on COCO images,
+#   one JSON object per line). The three files are pooled; the pipeline makes
+#   its own seeded 60/40 split, exactly as for vqa2. Categories are named
+#   object / attribute / spatial (not *_detection / *_recognition as in vqa2).
+#   'equalize_categories' trims every category to the size of the smallest
+#   one, so the three probes train on the same number of examples.
+# ==============================================================================
+DATASETS = {
+    'vqa2': {
+        'files': ['./vqav2_mapped.json'],
+        'categories': ['object_detection', 'attribute_recognition', 'spatial_recognition'],
+        'equalize_categories': False,
+    },
+    'vg': {
+        'files': ['../vg/train.jsonl', '../vg/val.jsonl', '../vg/test.jsonl'],
+        'categories': ['object', 'attribute', 'spatial'],
+        'equalize_categories': False,
+    },
+}
 
 CONFIG = {
-    'n_samples_object_detection': distribution.get('object_detection', 0),
-    'n_samples_attribute_recognition': distribution.get('attribute_recognition', 0),
-    'n_samples_spatial_recognition': distribution.get('spatial_recognition', 0),
+    # Choose dataset: 'vqa2' or 'vg'
+    'dataset': 'vqa2',
+
+    # Upper bound on examples per category (after yes/no balancing it is
+    # rounded down to an even number). None = use everything available.
+    'max_samples_per_category': None,
+
     'batch_size': 8,
     
     # Cache control
     'use_cache': True,
     
     # Paths
-    'vqa_json': './vqav2_mapped.json',
     'image_dirs': [
         '/scratch-nvme/ml-datasets/coco/train/data',
         '/scratch-nvme/ml-datasets/coco/validation/data',
     ],
     'cache_dir': './hidden_states_cache_final',
-    'categories': ['object_detection', 'attribute_recognition', 'spatial_recognition'],
     
     # Model
     'model_llava': 'llava-hf/llava-1.5-7b-hf',
@@ -97,16 +123,53 @@ CONFIG = {
     'run_lr_sanity_check': True,
 }
 
+if CONFIG['dataset'] not in DATASETS:
+    raise ValueError(f"CONFIG['dataset'] = {CONFIG['dataset']!r}; expected one of {list(DATASETS)}")
+# Derived from the dataset choice; the other three scripts inherit it.
+CONFIG['categories'] = DATASETS[CONFIG['dataset']]['categories']
+
+
+def load_dataset(config):
+    """Read the chosen dataset as {category: [{question, answer, image_id}]}."""
+    spec = DATASETS[config['dataset']]
+    data = {category: [] for category in spec['categories']}
+
+    if config['dataset'] == 'vqa2':
+        with open(spec['files'][0], 'r') as f:
+            all_data = json.load(f)
+        for category in spec['categories']:
+            data[category] = all_data[category]
+
+    elif config['dataset'] == 'vg':
+        for path in spec['files']:
+            with open(path, 'r') as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    item = json.loads(line)
+                    if item['category'] not in data:
+                        continue
+                    # 'image_id' is the Visual Genome id; the image on disk is
+                    # named after the COCO id.
+                    data[item['category']].append({
+                        'question': item['question'],
+                        'answer': item['answer'],
+                        'image_id': item['coco_id'],
+                    })
+
+    return data
+
 
 def load_vqa_data(config, category):
-    """Load data for a specific category from the categorized VQA JSON."""
-    data_path = Path(config['vqa_json'])
-    with open(data_path, 'r') as f:
-        all_data = json.load(f)
-        vqa_data = all_data[category]
-    
-    n_samples_key = f'n_samples_{category}'
-    n_samples = config.get(n_samples_key, len(vqa_data))
+    """Load data for a specific category of the chosen dataset as contrast pairs."""
+    data = load_dataset(config)
+    vqa_data = data[category]
+
+    n_samples = len(vqa_data)
+    if DATASETS[config['dataset']]['equalize_categories']:
+        n_samples = min(len(data[c]) for c in config['categories'])
+    if config['max_samples_per_category'] is not None:
+        n_samples = min(n_samples, config['max_samples_per_category'])
 
 
     # ==========================================================================
@@ -179,7 +242,9 @@ def extract_in_batches(pairs, config, category):
     # produced by the previous extraction code are incompatible and must not
     # be reused.
     # ==========================================================================
-    cache_file = cache_dir / f"cache_{category}_{n}_{model_tag}_ccs_aligned.npz"
+    # vqa2 caches keep their original names so existing ones stay valid.
+    dataset_tag = '' if config['dataset'] == 'vqa2' else f"{config['dataset']}_"
+    cache_file = cache_dir / f"cache_{dataset_tag}{category}_{n}_{model_tag}_ccs_aligned.npz"
     
     if config['use_cache'] and cache_file.exists():
         print("✓ Found cached hidden states!")
@@ -760,6 +825,7 @@ def main():
     model_key = f"model_{CONFIG['chosen_model']}"
     chosen_model_name = CONFIG[model_key]
     print(f"Model: {chosen_model_name}")
+    print(f"Dataset: {CONFIG['dataset']} (categories: {CONFIG['categories']})")
     
     all_results = {}
     
