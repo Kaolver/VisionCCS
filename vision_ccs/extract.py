@@ -213,7 +213,11 @@ def extract_one(model, proc, model_tag, image, text, layers, pos_names, eot_id):
     idx = locate_positions(inputs['input_ids'][0], eot_id)
     take = [idx[p] for p in pos_names]
     stack = torch.stack([out.hidden_states[l][0, take, :] for l in layers], dim=0)
-    return stack.float().cpu().numpy().astype(np.float16), idx
+    # clip to the float16 range first: a single outlier activation above 65504
+    # would otherwise become inf and turn that whole layer NaN after normalising
+    x = stack.float().cpu().numpy()
+    np.clip(x, -65504, 65504, out=x)
+    return x.astype(np.float16), idx
 
 
 # ============================================================================
@@ -228,8 +232,13 @@ def main():
     ap.add_argument('--model', default='qwen2', choices=list(MODEL_PATHS))
     ap.add_argument('--categories', nargs='+', default=CATEGORIES)
     ap.add_argument('--vqa-json', default='./vqav2_mapped.json')
+    # 'validation' is the folder name on Snellius; with only 'val' every
+    # validation-split image was a silent 'missing_image' skip (~14% of items).
+    # reanalysis.py / transfer.py deliberately keep the old list: they replay
+    # the v1 extractor's skip set to align rows of caches built with it.
     ap.add_argument('--image-dirs', nargs='+', default=[
         '/scratch-nvme/ml-datasets/coco/train/data',
+        '/scratch-nvme/ml-datasets/coco/validation/data',
         '/scratch-nvme/ml-datasets/coco/val/data'])
     ap.add_argument('--out-dir', default='./caches_v3')
     ap.add_argument('--layer-stride', type=int, default=2,

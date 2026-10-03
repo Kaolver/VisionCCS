@@ -123,14 +123,61 @@ def run_one(pos, neg, labels, image_ids, cfg, seed, grouped, norm_scheme,
     # identical protocol to reanalysis.run_cell, minus the controls
     groups = image_ids if grouped else None
 
+def load_zeroshot(zs_dir, tags, model_tag, category, question_ids):
+    """Zero-shot yes-no margins aligned to the cache rows, one array per tag.
+
+    Joined on question_id (zero_shot.py and extract.py skip items independently,
+    so row order cannot be trusted); rows without a zero-shot score are NaN.
+    """
+    out = {}
+    if question_ids is None:
+        print('  [zero-shot] cache has no question_ids; skipping the comparison')
+        return out
+    qids = [str(q) for q in question_ids]
+    for tag in tags:
+        f = Path(zs_dir) / f'zeroshot_{model_tag}{tag}_{category}.npz'
+        if not f.exists():
+            print(f'  [zero-shot] {f.name} not found; column omitted')
+            continue
+        d = np.load(f)
+        margin = dict(zip((str(q) for q in d['question_ids']),
+                          (d['yes_logit'] - d['no_logit']).astype(float)))
+        m = np.array([margin.get(q, np.nan) for q in qids])
+        out[tag] = m
+        print(f'  [zero-shot] {f.name}: {np.isfinite(m).mean():.1%} of cache rows matched')
+    return out
+
+
+def zeroshot_on_test(zs, te, y_te):
+    """Zero-shot accuracy on exactly the test rows the probes are scored on.
+
+    Calibration (top half by margin -> yes) is applied within these rows, the
+    same way CCS normalisation uses the test split's own statistics.
+    """
+    from zero_shot import calibrated_accuracy
+    res = {}
+    for tag, m in zs.items():
+        mt = m[te]
+        ok = np.isfinite(mt)
+        if ok.sum() < 2:
+            continue
+        cal, _ = calibrated_accuracy(mt[ok], y_te[ok])
+        res[tag] = {'raw_acc': float(((mt[ok] > 0).astype(int) == y_te[ok]).mean()),
+                    'cal_acc': cal, 'n': int(ok.sum()), 'coverage': float(ok.mean())}
+    return res
+
+
 def run_one(pos, neg, labels, image_ids, cfg, seed, groups, norm_scheme,
-            skip_logreg, distractor_labels=None):
+            skip_logreg, distractor_labels=None, zs=None):
     tr, te = make_split(len(labels), seed, cfg['train_frac'], groups=groups)
     y_tr, y_te = labels[tr], labels[te]
+    out = {}
+    if zs:
+        out['zeroshot'] = zeroshot_on_test(zs, te, y_te)
     p_tr, n_tr, p_te, n_te = normalize(pos[tr], neg[tr], pos[te], neg[te],
                                        norm_scheme, cfg['var_normalize'],
                                        cluster_k=cfg.get('cluster_k', 8), seed=seed)
-    out = {'n_train': int(len(tr)), 'n_test': int(len(te))}
+    out.update({'n_train': int(len(tr)), 'n_test': int(len(te))})
     if image_ids is not None:
         # share of test rows whose IMAGE also occurs in train (0 for a grouped split)
         out['leaked_test_frac'] = float(np.isin(image_ids[te], image_ids[tr]).mean())
@@ -195,6 +242,13 @@ def main():
                     choices=['per_split', 'train_stats', 'cluster'])
     ap.add_argument('--no-var-normalize', action='store_true')
     ap.add_argument('--skip-logreg', action='store_true')
+    ap.add_argument('--zeroshot-dir', default=None,
+                    help='directory of zero_shot.py outputs; adds zero-shot accuracy '
+                         'on the SAME test rows as the probes (joined on question_id)')
+    ap.add_argument('--zeroshot-tags', nargs='+', default=[],
+                    help='zero_shot.py --tag values to load, e.g. _vqa_noinstr _vqa')
+    ap.add_argument('--resume', action='store_true',
+                    help='keep categories already in --out (same config) and run the rest')
     ap.add_argument('--train-frac', type=float, default=0.6)
     ap.add_argument('--val-frac', type=float, default=0.2)
     ap.add_argument('--epochs', type=int, default=1000)
@@ -222,8 +276,18 @@ def main():
                           'group_by': args.group_by, 'templates': args.templates,
                           'shuffled': args.shuffled, 'seeds': args.seeds,
                           'model': args.model}, 'cells': {}}
+    if args.resume and Path(args.out).exists():
+        prev = json.loads(Path(args.out).read_text())
+        if prev.get('config') == results['config']:
+            results = prev
+            print(f'[resume] {args.out}: keeping {sorted(prev["cells"])}')
+        else:
+            print(f'[resume] {args.out} was made with a different config; starting over')
 
     for category in args.categories:
+        if f'{args.model}/{category}' in results['cells']:
+            print(f'[resume] {args.model}/{category} already done, skipping')
+            continue
         path = find_cache_v3(args.cache_dir, args.model, category, args.shuffled,
                              args.templates, args.distractor)
         if path is None:
@@ -248,6 +312,9 @@ def main():
                 'both sides. Pass --group-by image (or question).')
         groups = split_groups(cache, group_by)
         print(f'  templates {cache["templates"]}  split unit: {group_by}')
+        zs = (load_zeroshot(args.zeroshot_dir, args.zeroshot_tags, args.model,
+                            category, cache['question_ids'])
+              if args.zeroshot_dir else {})
 
         # map requested layer NUMBERS / position NAMES to indices into the cache axes
         li_sel = [i for i, l in enumerate(layers)
@@ -274,18 +341,23 @@ def main():
             print(f'\n  position = {pos_name}')
             dcol = ' vs banner' if cache['distractor_labels'] is not None else ''
             print(f"    {'layer':>6s} {'CCS':>16s} {'sup_probe':>16s} "
-                  f"{'loss':>10s}{dcol}")
+                  f"{'logreg':>8s} {'loss':>10s}{dcol}")
             for li in li_sel:
                 P, N = cell_arrays(cache, li, pi)
                 # per cell: repeat over seeds and report mean +/- std
                 # (std = spread over seeds)
-                accs, sups, losses, dis = [], [], [], []
+                accs, sups, lrs, losses, dis = [], [], [], [], []
+                zs_seen = {}
                 for seed in args.seeds:
                     r = run_one(P, N, cache['labels'], cache['image_ids'], cfg,
                                 seed, groups, args.norm, args.skip_logreg,
-                                cache['distractor_labels'])
+                                cache['distractor_labels'], zs=zs)
                     accs.append(r['ccs']['flipped_acc'])
                     sups.append(r['sup_probe']['raw_acc'])
+                    if 'raw_acc' in r.get('logreg', {}):
+                        lrs.append(r['logreg']['raw_acc'])
+                    for tag, v in r.get('zeroshot', {}).items():
+                        zs_seen.setdefault(tag, []).append(v['cal_acc'])
                     losses.append(r['ccs']['best_loss'])
                     if 'ccs_vs_distractor' in r:
                         dis.append(r['ccs_vs_distractor']['flipped_acc'])
@@ -293,9 +365,18 @@ def main():
                         f'{pos_name}/L{layers[li]}', {})[str(seed)] = r
                 a, s_ = np.array(accs), np.array(sups)
                 extra = f' {np.mean(dis):9.1%}' if dis else ''
+                lr_col = f'{np.mean(lrs):8.1%}' if lrs else f'{"-":>8s}'
                 print(f'    {layers[li]:6d} {a.mean():7.1%}+/-{a.std():5.1%} '
-                      f'{s_.mean():7.1%}+/-{s_.std():5.1%} '
+                      f'{s_.mean():7.1%}+/-{s_.std():5.1%} {lr_col} '
                       f'{np.mean(losses):10.2e}{extra}')
+            # zero-shot does not depend on the layer: one line per position
+            for tag, v in zs_seen.items():
+                print(f'    zero-shot{tag} (calibrated, same test rows): '
+                      f'{np.mean(v):.1%} +/- {np.std(v):.1%}')
+
+        # written after every category, so a job killed by its time limit
+        # still leaves the categories it finished
+        Path(args.out).write_text(json.dumps(results, indent=2))
 
     Path(args.out).write_text(json.dumps(results, indent=2))
     print(f'\nWrote {args.out}')

@@ -60,6 +60,8 @@ question is the size of the first gap.
 | `vg_to_vqa.py` | converts `vg/*.jsonl` (Visual Genome on COCO images) into the same schema | - |
 | `run_zeroshot_all.sh` | zero-shot over models x {vqa, vg} x prompt variants (used by the smoke test) | yes |
 | `zeroshot_jobs/` | the 12 parallel zero-shot jobs, one script each, plus smoke test and `submit_all.sh`; see its README | yes |
+| `final_jobs/` | the final experiment: per model x dataset, zero-shot + CCS + tuned logistic regression at every 4th layer on the same test questions, plus the shuffled-image control; see its README | yes |
+| `final_summary.py` | report tables and the layer figure from `final_jobs/` results | no |
 | `collect_zeroshot.py` | zero-shot results -> one markdown/CSV table; tolerates jobs killed mid-run | no |
 | `reanalysis.py` | protocol-matched comparison of CCS / baselines / supervised on one cache | no (CPU fine) |
 | `layer_sweep.py` | the same analysis at every (layer, position) | no |
