@@ -40,6 +40,9 @@ OUT="${OUT:-./zeroshot_report}"
 LIMIT_ARG=""
 [ -n "${LIMIT:-}" ] && LIMIT_ARG="--limit $LIMIT"
 mkdir -p "$OUT"
+# one failing combination must not hide the others (the smoke test relies on
+# seeing every failure in one run), so record failures and exit non-zero at the end
+FAILED=""
 
 echo "models=$MODELS  datasets=$DATASETS  variants=$VARIANTS  limit=${LIMIT:-all}  out=$OUT"
 
@@ -61,7 +64,7 @@ for DATASET in $DATASETS; do
       echo ""
       echo "=== $MODEL / $DATASET / $VARIANT  ($(date '+%H:%M:%S')) ==="
       python zero_shot.py --model "$MODEL" $DATA_ARGS $VAR_ARGS $LIMIT_ARG \
-          --tag "$TAG" --out-dir "$OUT"
+          --tag "$TAG" --out-dir "$OUT" || FAILED="$FAILED $MODEL/$DATASET/$VARIANT"
     done
   done
 done
@@ -69,3 +72,7 @@ done
 echo ""
 echo "=== done $(date '+%H:%M:%S'); outputs ==="
 ls -lh "$OUT"
+if [ -n "$FAILED" ]; then
+  echo "FAILED:$FAILED" >&2
+  exit 1
+fi

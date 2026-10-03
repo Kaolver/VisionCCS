@@ -453,8 +453,49 @@ def test_locate_positions():
           m_missing == {'answer': 2, 'eot': 3, 'final': 3})
 
 
+def test_answer_token_ids():
+    from zero_shot import _first_token_ids, YES_FORMS, NO_FORMS
+
+    class SentencePieceLike:
+        """LLaVA (Llama) style: a leading space becomes a bare '▁' token."""
+        vocab = {'▁': 29871, '▁Yes': 3869, '▁yes': 4874, '▁YES': 22483,
+                 '▁No': 1939, '▁no': 694, '▁NO': 11698}
+
+        def encode(self, text, add_special_tokens=False):
+            ids = [self.vocab['▁']] if text.startswith(' ') else []
+            return ids + [self.vocab['▁' + text.strip()]]
+
+        def decode(self, ids):
+            inv = {v: k for k, v in self.vocab.items()}
+            return ''.join(inv[i] for i in ids).replace('▁', ' ')
+
+    class ByteBpeLike:
+        """Qwen style: ' Yes' is one token, 'Yes' another."""
+        vocab = {'Yes': 1, 'ĠYes': 2, 'yes': 3, 'Ġyes': 4, 'YES': 5,
+                 'No': 11, 'ĠNo': 12, 'no': 13, 'Ġno': 14, 'NO': 15}
+
+        def encode(self, text, add_special_tokens=False):
+            return [self.vocab[text.replace(' ', 'Ġ')]]
+
+        def decode(self, ids):
+            inv = {v: k for k, v in self.vocab.items()}
+            return ''.join(inv[i] for i in ids).replace('Ġ', ' ')
+
+    sp = SentencePieceLike()
+    y, n = _first_token_ids(sp, YES_FORMS), _first_token_ids(sp, NO_FORMS)
+    check('sentencepiece: bare-space token never scored as an answer',
+          29871 not in y and 29871 not in n, f'yes={y} no={n}')
+    check('sentencepiece: yes/no id sets are disjoint and complete',
+          y == [3869, 4874, 22483] and n == [694, 1939, 11698], f'yes={y} no={n}')
+
+    bpe = ByteBpeLike()
+    y, n = _first_token_ids(bpe, YES_FORMS), _first_token_ids(bpe, NO_FORMS)
+    check('byte-BPE: every surface form kept (unchanged by the fix)',
+          y == [1, 2, 3, 4, 5] and n == [11, 12, 13, 14, 15], f'yes={y} no={n}')
+
+
 if __name__ == '__main__':
-    for fn in (test_pair_reconstruction, test_alignment, test_auroc, test_splits,
+    for fn in (test_answer_token_ids, test_pair_reconstruction, test_alignment, test_auroc, test_splits,
                test_normalize, test_cluster_norm, test_kmeans, test_baselines,
                test_find_cache, test_score_report,
                test_pca_control, test_gaussian_control, test_diagnostics,

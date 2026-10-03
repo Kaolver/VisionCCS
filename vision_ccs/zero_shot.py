@@ -34,6 +34,12 @@ def _first_token_ids(tokenizer, forms):
         # only the FIRST token of each form matters: the model's next-token distribution
         # is over single tokens, so 'Yes' is scored by the id its first sub-token gets
         enc = tokenizer.encode(f, add_special_tokens=False)
+        # FIXED: LLaVA's SentencePiece tokenizer encodes ' Yes' as a bare '▁'
+        # (id 29871) followed by '▁Yes', and ' No' likewise, so the first token
+        # was the same pure-space id for both answers and the yes/no sets
+        # overlapped (the run aborted as degenerate). Whitespace-only tokens
+        # carry no answer, so skip to the first token with text in it.
+        enc = [t for t in enc if tokenizer.decode([t]).strip()]
         if enc:
             ids.append(enc[0])
     # deduplicate: ' Yes' and 'Yes' may map to the same first id in some tokenizers
