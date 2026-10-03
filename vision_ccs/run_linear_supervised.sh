@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=linear-supervised
+#SBATCH --job-name=diagnostics-linear-supervised
 #SBATCH --output=%x_%j.out
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1

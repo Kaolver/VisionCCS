@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=nonlinear-supervised
+#SBATCH --job-name=diagnostics-nonlinear-supervised
 #SBATCH --output=%x_%j.out
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1

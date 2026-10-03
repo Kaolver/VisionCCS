@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=linear-ccs
+#SBATCH --job-name=diagnostics-linear-ccs
 #SBATCH --output=%x_%j.out
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
