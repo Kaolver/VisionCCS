@@ -226,3 +226,6 @@ caches_v3/
 # committing them keeps a reported claim traceable to the run behind it.
 # (The old reanalysis_results*.json rule matched no filename the scripts
 # actually write, so it is dropped rather than widened.)
+
+# Regenerated from vg/*.jsonl by vg_to_vqa.py on every VG zero-shot job.
+vision_ccs/vg_mapped.json

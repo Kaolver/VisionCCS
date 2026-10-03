@@ -57,6 +57,9 @@ question is the size of the first gap.
 | `extract.py` | all-layer, named-token-position extraction; `--templates`, `--shuffle-images` control | yes |
 | `zero_shot.py` | calibrated Yes/No baseline; `--template`, `--no-instruction` | yes |
 | `pope_to_vqa.py` | converts POPE annotations into the `vqav2_mapped.json` schema | - |
+| `vg_to_vqa.py` | converts `vg/*.jsonl` (Visual Genome on COCO images) into the same schema | - |
+| `run_zeroshot_all.sh` | zero-shot over models x {vqa, vg} x prompt variants; one job per cell for parallel runs | yes |
+| `collect_zeroshot.py` | zero-shot results -> one markdown/CSV table; tolerates jobs killed mid-run | no |
 | `reanalysis.py` | protocol-matched comparison of CCS / baselines / supervised on one cache | no (CPU fine) |
 | `layer_sweep.py` | the same analysis at every (layer, position) | no |
 | `transfer.py` | fit on one category, evaluate on another | no |

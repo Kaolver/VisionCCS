@@ -175,8 +175,12 @@ def main():
     ap.add_argument('--model', default='qwen2', choices=['llava', 'qwen2', 'qwen2_5'])
     ap.add_argument('--categories', nargs='+', default=CATEGORIES)
     ap.add_argument('--vqa-json', default='./vqav2_mapped.json')
+    # 'validation' is the folder name martin's linear_ccs.py uses on Snellius;
+    # 'val' is kept for older copies. A missing folder is harmless, but a missing
+    # image is a silent skip, so check 'skipped' in the summary.
     ap.add_argument('--image-dirs', nargs='+', default=[
         '/scratch-nvme/ml-datasets/coco/train/data',
+        '/scratch-nvme/ml-datasets/coco/validation/data',
         '/scratch-nvme/ml-datasets/coco/val/data'])
     ap.add_argument('--out-dir', default='./zeroshot')
     ap.add_argument('--no-instruction', action='store_true',
