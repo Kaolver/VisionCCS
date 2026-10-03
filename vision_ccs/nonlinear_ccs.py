@@ -27,6 +27,8 @@ from linear_ccs import (
     load_vqa_data,
     extract_in_batches,
     lr_sanity_check,
+    report_feature_health,
+    report_output_health,
 )
 
 
@@ -41,6 +43,14 @@ CONFIG = {
     # Hidden layer width of the MLP probe - 100 as in the original
     # notebook's MLPProbe.
     'mlp_hidden_size': 100,
+
+    # ==========================================================================
+    # CHANGED (reproducibility): seed for torch (MLP initialisation and the
+    # per-restart permutation). The original notebook does not seed; this
+    # does not change the algorithm, only makes a run reproducible. Re-seeded
+    # before every category, so results don't depend on category order.
+    # ==========================================================================
+    'probe_seed': 42,
 }
 
 
@@ -102,6 +112,12 @@ def train_ccs_probe_nonlinear(pos_hiddens, neg_hiddens, labels, config):
     pos_test = normalize(pos_test_raw)
     neg_test = normalize(neg_test_raw)
 
+    # Diagnostics only: zero-variance dims make var-normalization divide by 0
+    report_feature_health({
+        'pos_train': (pos_train_raw, pos_train), 'neg_train': (neg_train_raw, neg_train),
+        'pos_test': (pos_test_raw, pos_test), 'neg_test': (neg_test_raw, neg_test),
+    })
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     pos_train = pos_train.to(device)
     neg_train = neg_train.to(device)
@@ -128,6 +144,8 @@ def train_ccs_probe_nonlinear(pos_hiddens, neg_hiddens, labels, config):
     print(f"\n{'='*70}")
     print(f"TRAINING WITH MULTIPLE RANDOM RESTARTS")
     print(f"{'='*70}")
+
+    torch.manual_seed(config['probe_seed'])
 
     for trial in range(config['ccs_ntries']):
         # ======================================================================
@@ -184,6 +202,8 @@ def train_ccs_probe_nonlinear(pos_hiddens, neg_hiddens, labels, config):
 
         probs = 0.5 * (p_pos + (1 - p_neg))
         preds = (probs > 0.5).cpu().numpy()
+
+    report_output_health(probs)
 
     raw_accuracy = (preds == labels_test).mean()
 

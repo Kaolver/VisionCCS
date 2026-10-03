@@ -35,6 +35,8 @@ from linear_ccs import (
     CONFIG as VISION_CCS_CONFIG,
     load_vqa_data,
     extract_in_batches,
+    report_feature_health,
+    report_output_health,
 )
 
 
@@ -184,6 +186,13 @@ def train_supervised_probe(pos_hiddens, neg_hiddens, labels, config,
     neg_train = normalize(neg_train_raw).to(device)
     pos_test = normalize(pos_test_raw).to(device)
     neg_test = normalize(neg_test_raw).to(device)
+
+    # Diagnostics only: zero-variance dims make var-normalization divide by 0
+    report_feature_health({
+        'pos_train': (pos_train_raw, pos_train), 'neg_train': (neg_train_raw, neg_train),
+        'pos_test': (pos_test_raw, pos_test), 'neg_test': (neg_test_raw, neg_test),
+    })
+
     labels_train_tensor = torch.FloatTensor(labels_train).to(device)
 
     n_train_pos = (labels_train == 1).sum()
@@ -215,6 +224,11 @@ def train_supervised_probe(pos_hiddens, neg_hiddens, labels, config,
         loss.backward()
         optimizer.step()
 
+        # Diagnostics only: loss trajectory (a stuck ~0.693 = log 2 means the
+        # output is constant, i.e. the probe collapsed)
+        if epoch % 200 == 0 or epoch == config['ccs_epochs'] - 1:
+            print(f"  Epoch {epoch+1:4d}/{config['ccs_epochs']}: Loss = {loss.item():.6f}")
+
     # Evaluation
     probe.eval()
     with torch.no_grad():
@@ -229,6 +243,8 @@ def train_supervised_probe(pos_hiddens, neg_hiddens, labels, config,
         avg_pred_test = 0.5 * (p_pos_test + (1 - p_neg_test))
         test_preds = (avg_pred_test > 0.5).cpu().numpy()
         test_acc = (test_preds == labels_test).mean()
+
+        report_output_health(avg_pred_test)
 
         pos_mask = labels_test == 1
         neg_mask = labels_test == 0

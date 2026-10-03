@@ -12,6 +12,7 @@ this baseline runs on the same data and hidden states.
 """
 
 import numpy as np
+import torch
 
 # Reuse the shared (revised, CCS-aligned) pipeline pieces
 from linear_ccs import (
@@ -37,6 +38,10 @@ CONFIG = {
     # Hidden layer width of the MLP probe: 100 as in the original
     # notebook's MLPProbe (same value as in unsupervised_nonlinear.py).
     'mlp_hidden_size': 100,
+
+    # CHANGED (reproducibility): seed for torch (MLP initialisation), same
+    # value as in nonlinear_ccs.py. Re-seeded before every category.
+    'probe_seed': 42,
 }
 
 
@@ -72,6 +77,7 @@ def main():
 
         # 3. Train the supervised non-linear probe — same procedure as the
         #    supervised linear probe, only the architecture differs
+        torch.manual_seed(CONFIG['probe_seed'])
         acc, probe = train_supervised_probe(
             pos_h, neg_h, labels, CONFIG,
             probe_factory=make_mlp_probe,

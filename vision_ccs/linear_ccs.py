@@ -789,6 +789,36 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
 
 
 # ==============================================================================
+# Diagnostics only (used by the non-linear and supervised probes): detect
+# NaNs from var-normalizing zero-variance dims and collapsed (constant)
+# probe outputs. They print, and do not affect training or accuracy.
+# ==============================================================================
+def report_feature_health(features):
+    """Diagnostics: zero-variance dims (raw) and non-finite values (normalized).
+
+    features: {name: (raw_tensor, normalized_tensor)}
+    """
+    print(f"\nFeature check:")
+    for name, (raw, normed) in features.items():
+        n_zero_var = (raw.std(dim=0, unbiased=False) == 0).sum().item()
+        n_nonfinite = (~torch.isfinite(normed)).sum().item()
+        print(f"  {name:9s}: zero-variance dims = {n_zero_var}, "
+              f"non-finite values after normalization = {n_nonfinite}")
+
+
+def report_output_health(probs):
+    """Diagnostics: a constant or NaN probe output means training collapsed."""
+    n_nonfinite = (~torch.isfinite(probs)).sum().item()
+    finite = probs[torch.isfinite(probs)]
+    if len(finite) > 0:
+        print(f"Test output check: non-finite = {n_nonfinite}/{len(probs)}, "
+              f"min = {finite.min().item():.4f}, max = {finite.max().item():.4f}, "
+              f"std = {finite.std().item():.6f}")
+    else:
+        print(f"Test output check: non-finite = {n_nonfinite}/{len(probs)} (all)")
+
+
+# ==============================================================================
 # CHANGED (CCS alignment): new function. The original notebook runs a supervised
 # logistic-regression check on the same hidden states BEFORE trying CCS
 # ("if logistic regression accuracy is bad, there's no hope of CCS doing well"),
