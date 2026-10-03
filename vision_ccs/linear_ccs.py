@@ -813,7 +813,7 @@ def lr_sanity_check(pos_hiddens, neg_hiddens, labels, config):
     x_train, x_test = x[train_idx], x[test_idx]
     y_train, y_test = labels[train_idx], labels[test_idx]
 
-    lr = LogisticRegression(class_weight="balanced", max_iter=1000)
+    lr = LogisticRegression(class_weight="balanced", max_iter=5000)
     lr.fit(x_train, y_train)
     acc = lr.score(x_test, y_test)
     print(f"\nLogistic regression sanity-check accuracy: {acc:.1%}")
