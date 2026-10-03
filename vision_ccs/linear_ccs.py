@@ -43,7 +43,7 @@ DATASETS = {
         'equalize_categories': False,
     },
     'vg': {
-        'files': ['../vg/train.jsonl', '../vg/val.jsonl', '../vg/test.jsonl'],
+        'files': ['./vg/train.jsonl', './vg/val.jsonl', './vg/test.jsonl'],
         'categories': ['object', 'attribute', 'spatial'],
         'equalize_categories': False,
     },
@@ -51,7 +51,7 @@ DATASETS = {
 
 CONFIG = {
     # Choose dataset: 'vqa2' or 'vg'
-    'dataset': 'vqa2',
+    'dataset': 'vg',
 
     # Upper bound on examples per category (after yes/no balancing it is
     # rounded down to an even number). None = use everything available.

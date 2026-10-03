@@ -1,0 +1,109 @@
+host    : gcn5.local.snellius.surf.nl
+workdir : /gpfs/home6/mdemirev/VisionCCS/vision_ccs
+python  : /gpfs/home6/mdemirev/VisionCCS/vision_ccs/venv/bin/python
+cuda    : True NVIDIA A100-SXM4-40GB MIG 3g.20gb
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+--------------------------------------------------------------------
+=== running nonlinear_supervised.py ===
+Qwen/Qwen2.5-VL-7B-Instruct + Contrast Pairs + Supervised NON-LINEAR (MLP) Probe
+Dataset: vg (categories: ['object', 'attribute', 'spatial'])
+
+######################################################################
+# CATEGORY: OBJECT
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: OBJECT
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_object_12000_qwen2_5_ccs_aligned.npz
+  Loaded: pos=(12000, 3584), neg=(12000, 3584)
+
+======================================================================
+SUPERVISED NON-LINEAR (MLP) PROBE
+======================================================================
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 3584
+
+Results:
+  Train Accuracy: 82.7%
+  Test Accuracy:  78.1%
+  Positive samples: 71.4% (2366 samples)
+  Negative samples: 84.6% (2434 samples)
+
+✓ COMPLETE: object → 78.1%
+
+######################################################################
+# CATEGORY: ATTRIBUTE
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: ATTRIBUTE
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_attribute_12000_qwen2_5_ccs_aligned.npz
+  Loaded: pos=(12000, 3584), neg=(12000, 3584)
+
+======================================================================
+SUPERVISED NON-LINEAR (MLP) PROBE
+======================================================================
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 3584
+
+Results:
+  Train Accuracy: 50.8%
+  Test Accuracy:  51.9%
+  Positive samples: 8.1% (2366 samples)
+  Negative samples: 94.5% (2434 samples)
+
+✓ COMPLETE: attribute → 51.9%
+
+######################################################################
+# CATEGORY: SPATIAL
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: SPATIAL
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_spatial_12000_qwen2_5_ccs_aligned.npz
+  Loaded: pos=(12000, 3584), neg=(12000, 3584)
+
+======================================================================
+SUPERVISED NON-LINEAR (MLP) PROBE
+======================================================================
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 3584
+
+Results:
+  Train Accuracy: 89.8%
+  Test Accuracy:  83.7%
+  Positive samples: 82.3% (2366 samples)
+  Negative samples: 85.1% (2434 samples)
+
+✓ COMPLETE: spatial → 83.7%
+
+======================================================================
+
+Final Results (supervised, non-linear MLP probe):
+  object                   : 78.1%
+  attribute                : 51.9%
+  spatial                  : 83.7%
+
+  Average                  : 71.2%
+
+======================================================================
+
+=== nonlinear_supervised.py finished at Sat Oct  3 15:44:15 CEST 2026 with exit code: 0 ===

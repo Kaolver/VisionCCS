@@ -1,0 +1,472 @@
+=== creating venv ===
+Requirement already satisfied: pip in ./venv/lib/python3.11/site-packages (22.3.1)
+Collecting pip
+  Downloading pip-26.2.1-py3-none-any.whl (1.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.8/1.8 MB 91.8 MB/s eta 0:00:00
+Installing collected packages: pip
+  Attempting uninstall: pip
+    Found existing installation: pip 22.3.1
+    Uninstalling pip-22.3.1:
+      Successfully uninstalled pip-22.3.1
+Successfully installed pip-26.2.1
+Looking in indexes: https://download.pytorch.org/whl/cu121
+Collecting torch==2.5.1
+  Downloading torch-2.5.1%2Bcu121-cp311-cp311-linux_x86_64.whl (780.5 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 780.5/780.5 MB 92.2 MB/s  0:00:05
+Collecting torchvision==0.20.1
+  Downloading torchvision-0.20.1%2Bcu121-cp311-cp311-linux_x86_64.whl (7.3 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.3/7.3 MB 156.4 MB/s  0:00:00
+Collecting filelock (from torch==2.5.1)
+  Downloading filelock-3.32.3-py3-none-any.whl.metadata (2.0 kB)
+Collecting typing-extensions>=4.8.0 (from torch==2.5.1)
+  Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting networkx (from torch==2.5.1)
+  Downloading networkx-3.6.1-py3-none-any.whl.metadata (6.8 kB)
+Collecting jinja2 (from torch==2.5.1)
+  Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+Collecting fsspec (from torch==2.5.1)
+  Downloading fsspec-2026.7.0-py3-none-any.whl.metadata (10 kB)
+Collecting nvidia-cuda-nvrtc-cu12==12.1.105 (from torch==2.5.1)
+  Downloading nvidia_cuda_nvrtc_cu12-12.1.105-py3-none-manylinux1_x86_64.whl (23.7 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 23.7/23.7 MB 512.8 MB/s  0:00:00
+Collecting nvidia-cuda-runtime-cu12==12.1.105 (from torch==2.5.1)
+  Downloading nvidia_cuda_runtime_cu12-12.1.105-py3-none-manylinux1_x86_64.whl (823 kB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 823.6/823.6 kB 436.1 MB/s  0:00:00
+Collecting nvidia-cuda-cupti-cu12==12.1.105 (from torch==2.5.1)
+  Downloading nvidia_cuda_cupti_cu12-12.1.105-py3-none-manylinux1_x86_64.whl (14.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 14.1/14.1 MB 598.6 MB/s  0:00:00
+Collecting nvidia-cudnn-cu12==9.1.0.70 (from torch==2.5.1)
+  Downloading nvidia_cudnn_cu12-9.1.0.70-py3-none-manylinux2014_x86_64.whl (664.8 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 664.8/664.8 MB 139.1 MB/s  0:00:02
+Collecting nvidia-cublas-cu12==12.1.3.1 (from torch==2.5.1)
+  Downloading nvidia_cublas_cu12-12.1.3.1-py3-none-manylinux1_x86_64.whl (410.6 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 410.6/410.6 MB 571.2 MB/s  0:00:00
+Collecting nvidia-cufft-cu12==11.0.2.54 (from torch==2.5.1)
+  Downloading nvidia_cufft_cu12-11.0.2.54-py3-none-manylinux1_x86_64.whl (121.6 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 121.6/121.6 MB 564.7 MB/s  0:00:00
+Collecting nvidia-curand-cu12==10.3.2.106 (from torch==2.5.1)
+  Downloading nvidia_curand_cu12-10.3.2.106-py3-none-manylinux1_x86_64.whl (56.5 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 56.5/56.5 MB 561.8 MB/s  0:00:00
+Collecting nvidia-cusolver-cu12==11.4.5.107 (from torch==2.5.1)
+  Downloading nvidia_cusolver_cu12-11.4.5.107-py3-none-manylinux1_x86_64.whl (124.2 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 124.2/124.2 MB 585.5 MB/s  0:00:00
+Collecting nvidia-cusparse-cu12==12.1.0.106 (from torch==2.5.1)
+  Downloading nvidia_cusparse_cu12-12.1.0.106-py3-none-manylinux1_x86_64.whl (196.0 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 196.0/196.0 MB 596.5 MB/s  0:00:00
+Collecting nvidia-nccl-cu12==2.21.5 (from torch==2.5.1)
+  Downloading nvidia_nccl_cu12-2.21.5-py3-none-manylinux2014_x86_64.whl (188.7 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 188.7/188.7 MB 600.0 MB/s  0:00:00
+Collecting nvidia-nvtx-cu12==12.1.105 (from torch==2.5.1)
+  Downloading nvidia_nvtx_cu12-12.1.105-py3-none-manylinux1_x86_64.whl (99 kB)
+Collecting triton==3.1.0 (from torch==2.5.1)
+  Downloading triton-3.1.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (209.5 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 209.5/209.5 MB 37.4 MB/s  0:00:05
+Collecting sympy==1.13.1 (from torch==2.5.1)
+  Downloading sympy-1.13.1-py3-none-any.whl.metadata (12 kB)
+Collecting numpy (from torchvision==0.20.1)
+  Downloading numpy-2.4.6-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
+Collecting pillow!=8.3.*,>=5.3.0 (from torchvision==0.20.1)
+  Downloading pillow-12.3.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (9.1 kB)
+Collecting nvidia-nvjitlink-cu12 (from nvidia-cusolver-cu12==11.4.5.107->torch==2.5.1)
+  Downloading nvidia_nvjitlink_cu12-12.9.86-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl (39.7 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 39.7/39.7 MB 544.8 MB/s  0:00:00
+Collecting mpmath<1.4,>=1.1.0 (from sympy==1.13.1->torch==2.5.1)
+  Downloading mpmath-1.3.0-py3-none-any.whl.metadata (8.6 kB)
+Collecting MarkupSafe>=2.0 (from jinja2->torch==2.5.1)
+  Downloading markupsafe-3.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+Downloading sympy-1.13.1-py3-none-any.whl (6.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.2/6.2 MB 164.4 MB/s  0:00:00
+Downloading mpmath-1.3.0-py3-none-any.whl (536 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 536.2/536.2 kB 38.6 MB/s  0:00:00
+Downloading pillow-12.3.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (6.9 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 6.9/6.9 MB 169.2 MB/s  0:00:00
+Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Downloading filelock-3.32.3-py3-none-any.whl (98 kB)
+Downloading fsspec-2026.7.0-py3-none-any.whl (206 kB)
+Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+Downloading markupsafe-3.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (22 kB)
+Downloading networkx-3.6.1-py3-none-any.whl (2.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 143.0 MB/s  0:00:00
+Downloading numpy-2.4.6-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.9 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.9/16.9 MB 86.1 MB/s  0:00:00
+Installing collected packages: mpmath, typing-extensions, sympy, pillow, nvidia-nvtx-cu12, nvidia-nvjitlink-cu12, nvidia-nccl-cu12, nvidia-curand-cu12, nvidia-cufft-cu12, nvidia-cuda-runtime-cu12, nvidia-cuda-nvrtc-cu12, nvidia-cuda-cupti-cu12, nvidia-cublas-cu12, numpy, networkx, MarkupSafe, fsspec, filelock, triton, nvidia-cusparse-cu12, nvidia-cudnn-cu12, jinja2, nvidia-cusolver-cu12, torch, torchvision
+
+Successfully installed MarkupSafe-3.0.3 filelock-3.32.3 fsspec-2026.7.0 jinja2-3.1.6 mpmath-1.3.0 networkx-3.6.1 numpy-2.4.6 nvidia-cublas-cu12-12.1.3.1 nvidia-cuda-cupti-cu12-12.1.105 nvidia-cuda-nvrtc-cu12-12.1.105 nvidia-cuda-runtime-cu12-12.1.105 nvidia-cudnn-cu12-9.1.0.70 nvidia-cufft-cu12-11.0.2.54 nvidia-curand-cu12-10.3.2.106 nvidia-cusolver-cu12-11.4.5.107 nvidia-cusparse-cu12-12.1.0.106 nvidia-nccl-cu12-2.21.5 nvidia-nvjitlink-cu12-12.9.86 nvidia-nvtx-cu12-12.1.105 pillow-12.3.0 sympy-1.13.1 torch-2.5.1+cu121 torchvision-0.20.1+cu121 triton-3.1.0 typing-extensions-4.16.0
+Collecting transformers
+  Downloading transformers-5.17.0-py3-none-any.whl.metadata (32 kB)
+Collecting accelerate
+  Downloading accelerate-1.15.0-py3-none-any.whl.metadata (19 kB)
+Requirement already satisfied: pillow in ./venv/lib/python3.11/site-packages (12.3.0)
+Collecting tqdm
+  Downloading tqdm-4.70.1-py3-none-any.whl.metadata (57 kB)
+Collecting scikit-learn
+  Downloading scikit_learn-1.9.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (9.3 kB)
+Collecting numpy<2
+  Downloading numpy-1.26.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (61 kB)
+Collecting qwen-vl-utils
+  Downloading qwen_vl_utils-0.0.14-py3-none-any.whl.metadata (9.0 kB)
+Collecting huggingface-hub<2.0,>=1.5.0 (from transformers)
+  Downloading huggingface_hub-1.32.0-py3-none-any.whl.metadata (16 kB)
+Collecting packaging>=20.0 (from transformers)
+  Downloading packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+Collecting pyyaml>=5.1 (from transformers)
+  Downloading pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+Collecting regex>=2025.10.22 (from transformers)
+  Downloading regex-2026.9.10-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (40 kB)
+Collecting tokenizers<0.24.0,>=0.23.1 (from transformers)
+  Downloading tokenizers-0.23.2-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (9.8 kB)
+Collecting typer (from transformers)
+  Downloading typer-0.27.2-py3-none-any.whl.metadata (16 kB)
+Collecting safetensors>=0.8.0 (from transformers)
+  Downloading safetensors-0.8.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.2 kB)
+Collecting click<9.0.0,>=8.4.2 (from huggingface-hub<2.0,>=1.5.0->transformers)
+  Downloading click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+Requirement already satisfied: filelock>=3.10.0 in ./venv/lib/python3.11/site-packages (from huggingface-hub<2.0,>=1.5.0->transformers) (3.32.3)
+Requirement already satisfied: fsspec>=2023.5.0 in ./venv/lib/python3.11/site-packages (from huggingface-hub<2.0,>=1.5.0->transformers) (2026.7.0)
+Collecting hf-xet<2.0.0,>=1.5.2 (from huggingface-hub<2.0,>=1.5.0->transformers)
+  Downloading hf_xet-1.6.0-cp38-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (4.9 kB)
+Collecting httpx<1,>=0.23.0 (from huggingface-hub<2.0,>=1.5.0->transformers)
+  Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Requirement already satisfied: typing-extensions>=4.1.0 in ./venv/lib/python3.11/site-packages (from huggingface-hub<2.0,>=1.5.0->transformers) (4.16.0)
+Collecting anyio (from httpx<1,>=0.23.0->huggingface-hub<2.0,>=1.5.0->transformers)
+  Downloading anyio-4.15.1-py3-none-any.whl.metadata (4.7 kB)
+Collecting certifi (from httpx<1,>=0.23.0->huggingface-hub<2.0,>=1.5.0->transformers)
+  Downloading certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+Collecting httpcore==1.* (from httpx<1,>=0.23.0->huggingface-hub<2.0,>=1.5.0->transformers)
+  Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+Collecting idna (from httpx<1,>=0.23.0->huggingface-hub<2.0,>=1.5.0->transformers)
+  Downloading idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+Collecting h11>=0.16 (from httpcore==1.*->httpx<1,>=0.23.0->huggingface-hub<2.0,>=1.5.0->transformers)
+  Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting psutil (from accelerate)
+  Downloading psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl.metadata (22 kB)
+Requirement already satisfied: torch>=2.0.0 in ./venv/lib/python3.11/site-packages (from accelerate) (2.5.1+cu121)
+Collecting scipy>=1.10.0 (from scikit-learn)
+  Downloading scipy-1.17.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)
+Collecting joblib>=1.4.0 (from scikit-learn)
+  Downloading joblib-1.6.0-py3-none-any.whl.metadata (6.5 kB)
+Collecting narwhals>=2.0.1 (from scikit-learn)
+  Downloading narwhals-2.26.0-py3-none-any.whl.metadata (15 kB)
+Collecting threadpoolctl>=3.5.0 (from scikit-learn)
+  Downloading threadpoolctl-3.7.0-py3-none-any.whl.metadata (24 kB)
+Collecting av (from qwen-vl-utils)
+  Downloading av-18.1.0-cp311-abi3-manylinux_2_28_x86_64.whl.metadata (5.0 kB)
+Collecting requests (from qwen-vl-utils)
+  Downloading requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+Collecting cloudpickle>=3.0 (from joblib>=1.4.0->scikit-learn)
+  Downloading cloudpickle-3.1.2-py3-none-any.whl.metadata (7.1 kB)
+Requirement already satisfied: networkx in ./venv/lib/python3.11/site-packages (from torch>=2.0.0->accelerate) (3.6.1)
+Requirement already satisfied: jinja2 in ./venv/lib/python3.11/site-packages (from torch>=2.0.0->accelerate) (3.1.6)
+Requirement already satisfied: nvidia-cuda-nvrtc-cu12==12.1.105 in ./venv/lib/python3.11/site-packages (from torch>=2.0.0->accelerate) (12.1.105)
+Requirement already satisfied: nvidia-cuda-runtime-cu12==12.1.105 in ./venv/lib/python3.11/site-packages (from torch>=2.0.0->accelerate) (12.1.105)
+Requirement already satisfied: nvidia-cuda-cupti-cu12==12.1.105 in ./venv/lib/python3.11/site-packages (from torch>=2.0.0->accelerate) (12.1.105)
+Requirement already satisfied: nvidia-cudnn-cu12==9.1.0.70 in ./venv/lib/python3.11/site-packages (from torch>=2.0.0->accelerate) (9.1.0.70)
+Requirement already satisfied: nvidia-cublas-cu12==12.1.3.1 in ./venv/lib/python3.11/site-packages (from torch>=2.0.0->accelerate) (12.1.3.1)
+Requirement already satisfied: nvidia-cufft-cu12==11.0.2.54 in ./venv/lib/python3.11/site-packages (from torch>=2.0.0->accelerate) (11.0.2.54)
+Requirement already satisfied: nvidia-curand-cu12==10.3.2.106 in ./venv/lib/python3.11/site-packages (from torch>=2.0.0->accelerate) (10.3.2.106)
+Requirement already satisfied: nvidia-cusolver-cu12==11.4.5.107 in ./venv/lib/python3.11/site-packages (from torch>=2.0.0->accelerate) (11.4.5.107)
+Requirement already satisfied: nvidia-cusparse-cu12==12.1.0.106 in ./venv/lib/python3.11/site-packages (from torch>=2.0.0->accelerate) (12.1.0.106)
+Requirement already satisfied: nvidia-nccl-cu12==2.21.5 in ./venv/lib/python3.11/site-packages (from torch>=2.0.0->accelerate) (2.21.5)
+Requirement already satisfied: nvidia-nvtx-cu12==12.1.105 in ./venv/lib/python3.11/site-packages (from torch>=2.0.0->accelerate) (12.1.105)
+Requirement already satisfied: triton==3.1.0 in ./venv/lib/python3.11/site-packages (from torch>=2.0.0->accelerate) (3.1.0)
+Requirement already satisfied: sympy==1.13.1 in ./venv/lib/python3.11/site-packages (from torch>=2.0.0->accelerate) (1.13.1)
+Requirement already satisfied: nvidia-nvjitlink-cu12 in ./venv/lib/python3.11/site-packages (from nvidia-cusolver-cu12==11.4.5.107->torch>=2.0.0->accelerate) (12.9.86)
+Requirement already satisfied: mpmath<1.4,>=1.1.0 in ./venv/lib/python3.11/site-packages (from sympy==1.13.1->torch>=2.0.0->accelerate) (1.3.0)
+Requirement already satisfied: MarkupSafe>=2.0 in ./venv/lib/python3.11/site-packages (from jinja2->torch>=2.0.0->accelerate) (3.0.3)
+Collecting charset_normalizer<4,>=2 (from requests->qwen-vl-utils)
+  Downloading charset_normalizer-3.5.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (45 kB)
+Collecting urllib3<3,>=1.26 (from requests->qwen-vl-utils)
+  Downloading urllib3-2.8.0-py3-none-any.whl.metadata (7.4 kB)
+Collecting shellingham>=1.3.0 (from typer->transformers)
+  Downloading shellingham-1.5.4-py2.py3-none-any.whl.metadata (3.5 kB)
+Collecting rich>=13.8.0 (from typer->transformers)
+  Downloading rich-15.0.0-py3-none-any.whl.metadata (18 kB)
+Collecting annotated-doc>=0.0.2 (from typer->transformers)
+  Downloading annotated_doc-0.0.5-py3-none-any.whl.metadata (6.5 kB)
+Collecting markdown-it-py>=2.2.0 (from rich>=13.8.0->typer->transformers)
+  Downloading markdown_it_py-4.2.0-py3-none-any.whl.metadata (7.4 kB)
+Collecting pygments<3.0.0,>=2.13.0 (from rich>=13.8.0->typer->transformers)
+  Downloading pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting mdurl~=0.1 (from markdown-it-py>=2.2.0->rich>=13.8.0->typer->transformers)
+  Downloading mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+Downloading numpy-1.26.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (18.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 18.3/18.3 MB 58.9 MB/s  0:00:00
+Downloading transformers-5.17.0-py3-none-any.whl (12.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 12.3/12.3 MB 185.5 MB/s  0:00:00
+Downloading huggingface_hub-1.32.0-py3-none-any.whl (842 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 842.9/842.9 kB 76.7 MB/s  0:00:00
+Downloading click-8.5.0-py3-none-any.whl (125 kB)
+Downloading hf_xet-1.6.0-cp38-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (4.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.5/4.5 MB 172.3 MB/s  0:00:00
+Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+Downloading tokenizers-0.23.2-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.4/3.4 MB 131.2 MB/s  0:00:00
+Downloading accelerate-1.15.0-py3-none-any.whl (394 kB)
+Downloading tqdm-4.70.1-py3-none-any.whl (80 kB)
+Downloading scikit_learn-1.9.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (9.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 9.3/9.3 MB 208.2 MB/s  0:00:00
+Downloading qwen_vl_utils-0.0.14-py3-none-any.whl (8.1 kB)
+Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+Downloading joblib-1.6.0-py3-none-any.whl (306 kB)
+Downloading cloudpickle-3.1.2-py3-none-any.whl (22 kB)
+Downloading narwhals-2.26.0-py3-none-any.whl (474 kB)
+Downloading packaging-26.3-py3-none-any.whl (129 kB)
+Downloading pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (806 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 806.6/806.6 kB 69.0 MB/s  0:00:00
+Downloading regex-2026.9.10-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (802 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 803.0/803.0 kB 75.3 MB/s  0:00:00
+Downloading safetensors-0.8.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (516 kB)
+Downloading scipy-1.17.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (35.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.3/35.3 MB 50.3 MB/s  0:00:00
+Downloading threadpoolctl-3.7.0-py3-none-any.whl (26 kB)
+Downloading anyio-4.15.1-py3-none-any.whl (132 kB)
+Downloading idna-3.20-py3-none-any.whl (69 kB)
+Downloading av-18.1.0-cp311-abi3-manylinux_2_28_x86_64.whl (35.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.8/35.8 MB 121.5 MB/s  0:00:00
+Downloading certifi-2026.7.22-py3-none-any.whl (136 kB)
+Downloading psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl (155 kB)
+Downloading requests-2.34.2-py3-none-any.whl (73 kB)
+Downloading charset_normalizer-3.5.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (262 kB)
+Downloading urllib3-2.8.0-py3-none-any.whl (135 kB)
+Downloading typer-0.27.2-py3-none-any.whl (123 kB)
+Downloading annotated_doc-0.0.5-py3-none-any.whl (5.3 kB)
+Downloading rich-15.0.0-py3-none-any.whl (310 kB)
+Downloading pygments-2.21.0-py3-none-any.whl (1.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.3/1.3 MB 108.2 MB/s  0:00:00
+Downloading markdown_it_py-4.2.0-py3-none-any.whl (91 kB)
+Downloading mdurl-0.1.2-py3-none-any.whl (10.0 kB)
+Downloading shellingham-1.5.4-py2.py3-none-any.whl (9.8 kB)
+Installing collected packages: urllib3, tqdm, threadpoolctl, shellingham, safetensors, regex, pyyaml, pygments, psutil, packaging, numpy, narwhals, mdurl, idna, hf-xet, h11, cloudpickle, click, charset_normalizer, certifi, av, annotated-doc, scipy, requests, markdown-it-py, joblib, httpcore, anyio, scikit-learn, rich, qwen-vl-utils, httpx, typer, huggingface-hub, tokenizers, accelerate, transformers
+  Attempting uninstall: numpy
+    Found existing installation: numpy 2.4.6
+    Uninstalling numpy-2.4.6:
+      Successfully uninstalled numpy-2.4.6
+
+Successfully installed accelerate-1.15.0 annotated-doc-0.0.5 anyio-4.15.1 av-18.1.0 certifi-2026.7.22 charset_normalizer-3.5.1 click-8.5.0 cloudpickle-3.1.2 h11-0.16.0 hf-xet-1.6.0 httpcore-1.0.9 httpx-0.28.1 huggingface-hub-1.32.0 idna-3.20 joblib-1.6.0 markdown-it-py-4.2.0 mdurl-0.1.2 narwhals-2.26.0 numpy-1.26.4 packaging-26.3 psutil-7.2.2 pygments-2.21.0 pyyaml-6.0.3 qwen-vl-utils-0.0.14 regex-2026.9.10 requests-2.34.2 rich-15.0.0 safetensors-0.8.0 scikit-learn-1.9.1 scipy-1.17.1 shellingham-1.5.4 threadpoolctl-3.7.0 tokenizers-0.23.2 tqdm-4.70.1 transformers-5.17.0 typer-0.27.2 urllib3-2.8.0
+host    : gcn5.local.snellius.surf.nl
+workdir : /gpfs/home6/mdemirev/VisionCCS/vision_ccs
+python  : /gpfs/home6/mdemirev/VisionCCS/vision_ccs/venv/bin/python
+cuda    : True NVIDIA A100-SXM4-40GB MIG 3g.20gb
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+--------------------------------------------------------------------
+=== running linear_ccs.py ===
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Model: Qwen/Qwen2-VL-7B-Instruct
+
+######################################################################
+# CATEGORY: OBJECT_DETECTION
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: OBJECT_DETECTION
+======================================================================
+⚠ No cache found. Starting extraction...
+
+Processing 1306 samples in batches of 8
+Searching in 2 image directories
+LOADING MODEL: qwen2
+Device: cuda
+Fetching 5 files:   0%|          | 0/5 [00:00<?, ?it/s]Fetching 5 files:  20%|██        | 1/5 [00:06<00:25,  6.46s/it]Fetching 5 files:  40%|████      | 2/5 [00:16<00:25,  8.36s/it]Fetching 5 files:  60%|██████    | 3/5 [00:16<00:09,  4.60s/it]Fetching 5 files:  80%|████████  | 4/5 [00:16<00:02,  2.94s/it]Fetching 5 files: 100%|██████████| 5/5 [00:16<00:00,  2.00s/it]Fetching 5 files: 100%|██████████| 5/5 [00:16<00:00,  3.40s/it]
+Loading weights:   0%|          | 0/730 [00:00<?, ?it/s]Loading weights:   0%|          | 1/730 [00:01<20:09,  1.66s/it]Loading weights:   0%|          | 2/730 [00:03<20:36,  1.70s/it]Loading weights:   1%|          | 4/730 [00:03<08:25,  1.43it/s]Loading weights:   1%|          | 5/730 [00:03<06:34,  1.84it/s]Loading weights:   1%|          | 6/730 [00:03<05:09,  2.34it/s]Loading weights:   2%|▏         | 16/730 [00:04<01:09, 10.20it/s]Loading weights:   2%|▏         | 18/730 [00:04<01:17,  9.17it/s]Loading weights:   4%|▍         | 28/730 [00:04<00:49, 14.13it/s]Loading weights:   4%|▍         | 30/730 [00:05<00:50, 13.93it/s]Loading weights:   5%|▌         | 40/730 [00:05<00:32, 21.16it/s]Loading weights:   6%|▌         | 43/730 [00:05<00:39, 17.47it/s]Loading weights:   7%|▋         | 52/730 [00:05<00:29, 23.04it/s]Loading weights:   8%|▊         | 55/730 [00:06<00:36, 18.54it/s]Loading weights:   9%|▉         | 64/730 [00:06<00:27, 23.83it/s]Loading weights:   9%|▉         | 67/730 [00:06<00:34, 19.07it/s]Loading weights:  10%|█         | 75/730 [00:07<00:33, 19.74it/s]Loading weights:  11%|█         | 78/730 [00:07<00:33, 19.63it/s]Loading weights:  12%|█▏        | 88/730 [00:07<00:24, 26.10it/s]Loading weights:  12%|█▏        | 91/730 [00:07<00:31, 20.40it/s]Loading weights:  14%|█▎        | 100/730 [00:08<00:24, 25.42it/s]Loading weights:  14%|█▍        | 103/730 [00:08<00:31, 19.93it/s]Loading weights:  15%|█▌        | 112/730 [00:08<00:24, 24.98it/s]Loading weights:  16%|█▌        | 115/730 [00:08<00:31, 19.71it/s]Loading weights:  17%|█▋        | 124/730 [00:09<00:24, 24.84it/s]Loading weights:  17%|█▋        | 127/730 [00:09<00:30, 19.64it/s]Loading weights:  19%|█▊        | 136/730 [00:09<00:24, 24.64it/s]Loading weights:  19%|█▉        | 139/730 [00:09<00:30, 19.44it/s]Loading weights:  20%|██        | 148/730 [00:10<00:23, 24.48it/s]Loading weights:  21%|██        | 151/730 [00:10<00:29, 19.49it/s]Loading weights:  22%|██▏       | 160/730 [00:10<00:28, 19.90it/s]Loading weights:  22%|██▏       | 163/730 [00:11<00:28, 19.73it/s]Loading weights:  24%|██▎       | 172/730 [00:11<00:22, 24.32it/s]Loading weights:  24%|██▍       | 175/730 [00:11<00:29, 18.88it/s]Loading weights:  25%|██▌       | 184/730 [00:11<00:22, 24.08it/s]Loading weights:  26%|██▌       | 187/730 [00:12<00:28, 19.23it/s]Loading weights:  27%|██▋       | 196/730 [00:12<00:21, 24.44it/s]Loading weights:  27%|██▋       | 199/730 [00:12<00:27, 19.46it/s]Loading weights:  28%|██▊       | 208/730 [00:13<00:25, 20.09it/s]Loading weights:  29%|██▉       | 211/730 [00:13<00:26, 19.93it/s]Loading weights:  30%|███       | 220/730 [00:13<00:25, 19.94it/s]Loading weights:  31%|███       | 223/730 [00:13<00:25, 19.55it/s]Loading weights:  32%|███▏      | 232/730 [00:14<00:20, 24.60it/s]Loading weights:  32%|███▏      | 235/730 [00:14<00:25, 19.41it/s]Loading weights:  33%|███▎      | 244/730 [00:14<00:19, 24.65it/s]Loading weights:  34%|███▍      | 247/730 [00:15<00:24, 19.58it/s]Loading weights:  35%|███▌      | 256/730 [00:15<00:19, 24.52it/s]Loading weights:  35%|███▌      | 259/730 [00:15<00:24, 19.53it/s]Loading weights:  37%|███▋      | 268/730 [00:15<00:19, 24.20it/s]Loading weights:  37%|███▋      | 271/730 [00:16<00:24, 18.86it/s]Loading weights:  38%|███▊      | 280/730 [00:16<00:18, 23.93it/s]Loading weights:  39%|███▉      | 283/730 [00:16<00:23, 19.20it/s]Loading weights:  40%|████      | 292/730 [00:17<00:25, 16.96it/s]Loading weights:  42%|████▏     | 304/730 [00:17<00:17, 24.18it/s]Loading weights:  42%|████▏     | 307/730 [00:17<00:21, 20.03it/s]Loading weights:  43%|████▎     | 316/730 [00:18<00:17, 24.16it/s]Loading weights:  44%|████▎     | 319/730 [00:18<00:21, 19.21it/s]Loading weights:  45%|████▍     | 328/730 [00:18<00:16, 23.95it/s]Loading weights:  45%|████▌     | 331/730 [00:19<00:20, 19.40it/s]Loading weights:  47%|████▋     | 345/730 [00:19<00:11, 34.53it/s]Loading weights:  51%|█████     | 371/730 [00:19<00:05, 67.66it/s]Loading weights:  54%|█████▍    | 395/730 [00:19<00:03, 97.26it/s]Loading weights:  58%|█████▊    | 427/730 [00:19<00:02, 138.77it/s]Loading weights:  62%|██████▏   | 453/730 [00:19<00:01, 160.67it/s]Loading weights:  66%|██████▌   | 479/730 [00:19<00:01, 177.63it/s]Loading weights:  70%|██████▉   | 509/730 [00:19<00:01, 206.87it/s]Loading weights:  73%|███████▎  | 534/730 [00:19<00:00, 216.32it/s]Loading weights:  77%|███████▋  | 560/730 [00:20<00:00, 223.88it/s]Loading weights:  80%|████████  | 587/730 [00:20<00:00, 232.05it/s]Loading weights:  84%|████████▍ | 616/730 [00:20<00:00, 239.42it/s]Loading weights:  88%|████████▊ | 645/730 [00:20<00:00, 247.67it/s]Loading weights:  92%|█████████▏| 671/730 [00:20<00:00, 240.97it/s]Loading weights:  96%|█████████▋| 703/730 [00:20<00:00, 256.01it/s]Loading weights: 100%|█████████▉| 729/730 [00:20<00:00, 204.57it/s]Loading weights: 100%|██████████| 730/730 [00:20<00:00, 35.18it/s] 
+✓ Model loaded successfully
+
+Batches:   0%|          | 0/164 [00:00<?, ?it/s]Batches:   1%|          | 1/164 [00:03<09:52,  3.64s/it]Batches:   1%|          | 2/164 [00:06<07:53,  2.92s/it]Batches:   2%|▏         | 3/164 [00:08<07:00,  2.61s/it]Batches:   2%|▏         | 4/164 [00:10<06:36,  2.48s/it]Batches:   3%|▎         | 5/164 [00:13<06:32,  2.47s/it]Batches:   4%|▎         | 6/164 [00:15<06:23,  2.43s/it]Batches:   4%|▍         | 7/164 [00:17<06:16,  2.40s/it]Batches:   5%|▍         | 8/164 [00:20<06:12,  2.39s/it]Batches:   5%|▌         | 9/164 [00:22<06:18,  2.44s/it]Batches:   6%|▌         | 10/164 [00:24<06:01,  2.35s/it]Batches:   7%|▋         | 11/164 [00:27<05:53,  2.31s/it]Batches:   7%|▋         | 12/164 [00:29<05:53,  2.33s/it]Batches:   8%|▊         | 13/164 [00:31<05:54,  2.34s/it]Batches:   9%|▊         | 14/164 [00:34<05:58,  2.39s/it]Batches:   9%|▉         | 15/164 [00:36<05:57,  2.40s/it]Batches:  10%|▉         | 16/164 [00:39<06:10,  2.50s/it]Batches:  10%|█         | 17/164 [00:41<06:07,  2.50s/it]Batches:  11%|█         | 18/164 [00:44<06:03,  2.49s/it]Batches:  12%|█▏        | 19/164 [00:46<05:58,  2.47s/it]Batches:  12%|█▏        | 20/164 [00:49<05:54,  2.46s/it]Batches:  13%|█▎        | 21/164 [00:51<05:45,  2.42s/it]Batches:  13%|█▎        | 22/164 [00:54<05:45,  2.44s/it]Batches:  14%|█▍        | 23/164 [00:56<05:45,  2.45s/it]Batches:  15%|█▍        | 24/164 [00:58<05:37,  2.41s/it]Batches:  15%|█▌        | 25/164 [01:01<05:32,  2.39s/it]Batches:  16%|█▌        | 26/164 [01:03<05:25,  2.36s/it]Batches:  16%|█▋        | 27/164 [01:06<05:31,  2.42s/it]Batches:  17%|█▋        | 28/164 [01:08<05:29,  2.43s/it]Batches:  18%|█▊        | 29/164 [01:10<05:19,  2.36s/it]Batches:  18%|█▊        | 30/164 [01:13<05:18,  2.38s/it]Batches:  19%|█▉        | 31/164 [01:15<05:19,  2.40s/it]Batches:  20%|█▉        | 32/164 [01:17<05:13,  2.38s/it]Batches:  20%|██        | 33/164 [01:20<05:18,  2.43s/it]Batches:  21%|██        | 34/164 [01:22<05:14,  2.42s/it]Batches:  21%|██▏       | 35/164 [01:25<05:10,  2.41s/it]Batches:  22%|██▏       | 36/164 [01:27<05:05,  2.39s/it]Batches:  23%|██▎       | 37/164 [01:30<05:14,  2.48s/it]Batches:  23%|██▎       | 38/164 [01:32<04:59,  2.37s/it]Batches:  24%|██▍       | 39/164 [01:34<04:55,  2.36s/it]Batches:  24%|██▍       | 40/164 [01:36<04:42,  2.28s/it]Batches:  25%|██▌       | 41/164 [01:39<04:50,  2.36s/it]Batches:  26%|██▌       | 42/164 [01:41<04:43,  2.32s/it]Batches:  26%|██▌       | 43/164 [01:44<04:45,  2.36s/it]Batches:  27%|██▋       | 44/164 [01:46<04:44,  2.37s/it]Batches:  27%|██▋       | 45/164 [01:48<04:42,  2.38s/it]Batches:  28%|██▊       | 46/164 [01:51<04:41,  2.39s/it]Batches:  29%|██▊       | 47/164 [01:53<04:32,  2.33s/it]Batches:  29%|██▉       | 48/164 [01:55<04:35,  2.37s/it]Batches:  30%|██▉       | 49/164 [01:58<04:29,  2.34s/it]Batches:  30%|███       | 50/164 [02:00<04:22,  2.31s/it]Batches:  31%|███       | 51/164 [02:02<04:24,  2.34s/it]Batches:  32%|███▏      | 52/164 [02:05<04:23,  2.35s/it]Batches:  32%|███▏      | 53/164 [02:07<04:17,  2.32s/it]Batches:  33%|███▎      | 54/164 [02:10<04:25,  2.41s/it]Batches:  34%|███▎      | 55/164 [02:12<04:17,  2.36s/it]Batches:  34%|███▍      | 56/164 [02:14<04:08,  2.30s/it]Batches:  35%|███▍      | 57/164 [02:16<04:08,  2.32s/it]Batches:  35%|███▌      | 58/164 [02:19<04:06,  2.32s/it]Batches:  36%|███▌      | 59/164 [02:21<04:02,  2.31s/it]Batches:  37%|███▋      | 60/164 [02:23<04:07,  2.38s/it]Batches:  37%|███▋      | 61/164 [02:26<03:59,  2.32s/it]Batches:  38%|███▊      | 62/164 [02:28<03:56,  2.31s/it]Batches:  38%|███▊      | 63/164 [02:30<03:49,  2.27s/it]Batches:  39%|███▉      | 64/164 [02:32<03:48,  2.28s/it]Batches:  40%|███▉      | 65/164 [02:35<03:53,  2.36s/it]Batches:  40%|████      | 66/164 [02:37<03:47,  2.32s/it]Batches:  41%|████      | 67/164 [02:39<03:43,  2.31s/it]Batches:  41%|████▏     | 68/164 [02:42<03:44,  2.34s/it]Batches:  42%|████▏     | 69/164 [02:44<03:44,  2.36s/it]Batches:  43%|████▎     | 70/164 [02:47<03:43,  2.38s/it]Batches:  43%|████▎     | 71/164 [02:49<03:42,  2.40s/it]Batches:  44%|████▍     | 72/164 [02:51<03:38,  2.37s/it]Batches:  45%|████▍     | 73/164 [02:54<03:31,  2.32s/it]Batches:  45%|████▌     | 74/164 [02:56<03:24,  2.27s/it]Batches:  46%|████▌     | 75/164 [02:58<03:23,  2.29s/it]Batches:  46%|████▋     | 76/164 [03:00<03:17,  2.25s/it]Batches:  47%|████▋     | 77/164 [03:03<03:18,  2.28s/it]Batches:  48%|████▊     | 78/164 [03:05<03:16,  2.29s/it]Batches:  48%|████▊     | 79/164 [03:07<03:11,  2.25s/it]Batches:  49%|████▉     | 80/164 [03:09<03:11,  2.27s/it]Batches:  49%|████▉     | 81/164 [03:12<03:06,  2.25s/it]Batches:  50%|█████     | 82/164 [03:14<03:06,  2.28s/it]Batches:  51%|█████     | 83/164 [03:16<03:06,  2.31s/it]Batches:  51%|█████     | 84/164 [03:19<03:01,  2.27s/it]Batches:  52%|█████▏    | 85/164 [03:21<02:56,  2.23s/it]Batches:  52%|█████▏    | 86/164 [03:23<02:52,  2.21s/it]Batches:  53%|█████▎    | 87/164 [03:25<02:59,  2.33s/it]Batches:  54%|█████▎    | 88/164 [03:28<02:57,  2.34s/it]Batches:  54%|█████▍    | 89/164 [03:30<02:52,  2.30s/it]Batches:  55%|█████▍    | 90/164 [03:32<02:46,  2.25s/it]Batches:  55%|█████▌    | 91/164 [03:35<02:46,  2.28s/it]Batches:  56%|█████▌    | 92/164 [03:37<02:45,  2.31s/it]Batches:  57%|█████▋    | 93/164 [03:39<02:44,  2.31s/it]Batches:  57%|█████▋    | 94/164 [03:42<02:44,  2.34s/it]Batches:  58%|█████▊    | 95/164 [03:44<02:51,  2.49s/it]Batches:  59%|█████▊    | 96/164 [03:47<02:46,  2.46s/it]Batches:  59%|█████▉    | 97/164 [03:49<02:45,  2.47s/it]Batches:  60%|█████▉    | 98/164 [03:52<02:41,  2.45s/it]Batches:  60%|██████    | 99/164 [03:54<02:33,  2.37s/it]Batches:  61%|██████    | 100/164 [03:56<02:31,  2.36s/it]Batches:  62%|██████▏   | 101/164 [03:59<02:27,  2.34s/it]Batches:  62%|██████▏   | 102/164 [04:01<02:23,  2.31s/it]Batches:  63%|██████▎   | 103/164 [04:03<02:23,  2.35s/it]Batches:  63%|██████▎   | 104/164 [04:06<02:19,  2.33s/it]Batches:  64%|██████▍   | 105/164 [04:08<02:18,  2.34s/it]Batches:  65%|██████▍   | 106/164 [04:10<02:15,  2.33s/it]Batches:  65%|██████▌   | 107/164 [04:13<02:14,  2.37s/it]Batches:  66%|██████▌   | 108/164 [04:15<02:07,  2.28s/it]Batches:  66%|██████▋   | 109/164 [04:17<02:05,  2.29s/it]Batches:  67%|██████▋   | 110/164 [04:20<02:10,  2.42s/it]Batches:  68%|██████▊   | 111/164 [04:22<02:07,  2.41s/it]Batches:  68%|██████▊   | 112/164 [04:24<02:02,  2.36s/it]Batches:  69%|██████▉   | 113/164 [04:27<02:00,  2.37s/it]Batches:  70%|██████▉   | 114/164 [04:29<01:58,  2.37s/it]Batches:  70%|███████   | 115/164 [04:32<01:56,  2.37s/it]Batches:  71%|███████   | 116/164 [04:34<01:51,  2.33s/it]Batches:  71%|███████▏  | 117/164 [04:36<01:47,  2.29s/it]Batches:  72%|███████▏  | 118/164 [04:38<01:45,  2.28s/it]Batches:  73%|███████▎  | 119/164 [04:40<01:41,  2.26s/it]Batches:  73%|███████▎  | 120/164 [04:43<01:41,  2.31s/it]Batches:  74%|███████▍  | 121/164 [04:45<01:40,  2.34s/it]Batches:  74%|███████▍  | 122/164 [04:47<01:35,  2.27s/it]Batches:  75%|███████▌  | 123/164 [04:50<01:34,  2.30s/it]Batches:  76%|███████▌  | 124/164 [04:52<01:32,  2.32s/it]Batches:  76%|███████▌  | 125/164 [04:55<01:31,  2.34s/it]Batches:  77%|███████▋  | 126/164 [04:57<01:28,  2.34s/it]Batches:  77%|███████▋  | 127/164 [04:59<01:27,  2.36s/it]Batches:  78%|███████▊  | 128/164 [05:02<01:24,  2.34s/it]Batches:  79%|███████▊  | 129/164 [05:04<01:18,  2.25s/it]Batches:  79%|███████▉  | 130/164 [05:06<01:17,  2.28s/it]Batches:  80%|███████▉  | 131/164 [05:08<01:16,  2.32s/it]Batches:  80%|████████  | 132/164 [05:11<01:12,  2.27s/it]Batches:  81%|████████  | 133/164 [05:13<01:11,  2.32s/it]Batches:  82%|████████▏ | 134/164 [05:15<01:08,  2.29s/it]Batches:  82%|████████▏ | 135/164 [05:18<01:07,  2.34s/it]Batches:  83%|████████▎ | 136/164 [05:20<01:06,  2.37s/it]Batches:  84%|████████▎ | 137/164 [05:23<01:04,  2.39s/it]Batches:  84%|████████▍ | 138/164 [05:25<00:59,  2.30s/it]Batches:  85%|████████▍ | 139/164 [05:27<00:58,  2.34s/it]Batches:  85%|████████▌ | 140/164 [05:29<00:55,  2.32s/it]Batches:  86%|████████▌ | 141/164 [05:32<00:53,  2.33s/it]Batches:  87%|████████▋ | 142/164 [05:34<00:50,  2.31s/it]Batches:  87%|████████▋ | 143/164 [05:36<00:49,  2.35s/it]Batches:  88%|████████▊ | 144/164 [05:39<00:46,  2.34s/it]Batches:  88%|████████▊ | 145/164 [05:41<00:46,  2.45s/it]Batches:  89%|████████▉ | 146/164 [05:44<00:43,  2.40s/it]Batches:  90%|████████▉ | 147/164 [05:46<00:40,  2.39s/it]Batches:  90%|█████████ | 148/164 [05:48<00:37,  2.34s/it]Batches:  91%|█████████ | 149/164 [05:51<00:35,  2.39s/it]Batches:  91%|█████████▏| 150/164 [05:53<00:32,  2.34s/it]Batches:  92%|█████████▏| 151/164 [05:56<00:31,  2.41s/it]Batches:  93%|█████████▎| 152/164 [05:58<00:28,  2.41s/it]Batches:  93%|█████████▎| 153/164 [06:01<00:27,  2.47s/it]Batches:  94%|█████████▍| 154/164 [06:03<00:24,  2.44s/it]Batches:  95%|█████████▍| 155/164 [06:05<00:22,  2.45s/it]Batches:  95%|█████████▌| 156/164 [06:08<00:19,  2.39s/it]Batches:  96%|█████████▌| 157/164 [06:10<00:16,  2.37s/it]Batches:  96%|█████████▋| 158/164 [06:12<00:14,  2.35s/it]Batches:  97%|█████████▋| 159/164 [06:15<00:11,  2.37s/it]Batches:  98%|█████████▊| 160/164 [06:17<00:09,  2.33s/it]Batches:  98%|█████████▊| 161/164 [06:19<00:07,  2.34s/it]Batches:  99%|█████████▉| 162/164 [06:22<00:04,  2.39s/it]Batches:  99%|█████████▉| 163/164 [06:24<00:02,  2.39s/it]Batches: 100%|██████████| 164/164 [06:25<00:00,  1.89s/it]Batches: 100%|██████████| 164/164 [06:25<00:00,  2.35s/it]
+
+======================================================================
+✓ Successfully processed: 1306/1306
+✗ Skipped (missing/error): 0/1306
+
+Extracted shapes:
+  Positive: (1306, 3584)
+  Negative: (1306, 3584)
+  Labels: (1306,)
+
+Cached to: hidden_states_cache_final/cache_object_detection_1306_qwen2_ccs_aligned.npz
+
+Logistic regression sanity-check accuracy: 82.4%
+
+======================================================================
+TRAINING CCS PROBE
+======================================================================
+
+Dataset split:
+  Train: 783 samples (402 pos, 381 neg)
+  Test:  523 samples (251 pos, 272 neg)
+  Hidden dim: 3584
+
+======================================================================
+TRAINING WITH MULTIPLE RANDOM RESTARTS
+======================================================================
+  Trial  1/10: Loss = 0.010284
+  Trial  2/10: Loss = 0.003833
+  Trial  3/10: Loss = 0.001281
+  Trial  4/10: Loss = 0.006388
+  Trial  5/10: Loss = 0.001281
+  Trial  6/10: Loss = 0.003834
+  Trial  7/10: Loss = 0.005112
+  Trial  8/10: Loss = 0.011503
+  Trial  9/10: Loss = 0.006390
+  Trial 10/10: Loss = 0.011496
+
+======================================================================
+EVALUATION WITH BEST PROBE
+======================================================================
+Best loss: 0.001281
+
+Test Results:
+  Overall Accuracy: 89.9% (470/523)
+  Positive samples: 94.0% (251 samples)
+  Negative samples: 86.0% (272 samples)
+
+✓ COMPLETE: object_detection → 89.9%
+
+######################################################################
+# CATEGORY: ATTRIBUTE_RECOGNITION
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: ATTRIBUTE_RECOGNITION
+======================================================================
+⚠ No cache found. Starting extraction...
+
+Processing 3366 samples in batches of 8
+Searching in 2 image directories
+LOADING MODEL: qwen2
+Device: cuda
+Fetching 5 files:   0%|          | 0/5 [00:00<?, ?it/s]Fetching 5 files: 100%|██████████| 5/5 [00:00<00:00, 1401.65it/s]
+Loading weights:   0%|          | 0/730 [00:00<?, ?it/s]Loading weights:   0%|          | 1/730 [00:00<05:30,  2.21it/s]Loading weights:   0%|          | 2/730 [00:01<06:10,  1.97it/s]Loading weights:   1%|          | 5/730 [00:01<02:07,  5.67it/s]Loading weights:   2%|▏         | 16/730 [00:01<00:34, 20.47it/s]Loading weights:   3%|▎         | 20/730 [00:01<00:31, 22.55it/s]Loading weights:   4%|▍         | 28/730 [00:01<00:23, 30.05it/s]Loading weights:   5%|▌         | 40/730 [00:01<00:16, 42.74it/s]Loading weights:   6%|▋         | 46/730 [00:01<00:16, 42.31it/s]Loading weights:   7%|▋         | 51/730 [00:02<00:16, 40.08it/s]Loading weights:   9%|▉         | 64/730 [00:02<00:12, 52.43it/s]Loading weights:  10%|▉         | 70/730 [00:02<00:13, 49.13it/s]Loading weights:  10%|█         | 76/730 [00:02<00:13, 46.72it/s]Loading weights:  12%|█▏        | 88/730 [00:02<00:11, 55.34it/s]Loading weights:  13%|█▎        | 94/730 [00:02<00:12, 51.18it/s]Loading weights:  14%|█▎        | 100/730 [00:02<00:13, 48.04it/s]Loading weights:  15%|█▌        | 112/730 [00:03<00:10, 56.25it/s]Loading weights:  16%|█▌        | 118/730 [00:03<00:11, 51.81it/s]Loading weights:  17%|█▋        | 125/730 [00:03<00:13, 44.72it/s]Loading weights:  19%|█▊        | 136/730 [00:03<00:11, 51.53it/s]Loading weights:  20%|██        | 148/730 [00:03<00:09, 58.21it/s]Loading weights:  21%|██        | 154/730 [00:03<00:10, 53.43it/s]Loading weights:  22%|██▏       | 161/730 [00:04<00:10, 51.79it/s]Loading weights:  24%|██▎       | 172/730 [00:04<00:11, 49.17it/s]Loading weights:  25%|██▍       | 180/730 [00:04<00:10, 54.99it/s]Loading weights:  25%|██▌       | 186/730 [00:04<00:11, 46.47it/s]Loading weights:  27%|██▋       | 197/730 [00:04<00:10, 53.14it/s]Loading weights:  28%|██▊       | 208/730 [00:05<00:10, 51.87it/s]Loading weights:  30%|███       | 220/730 [00:05<00:08, 57.59it/s]Loading weights:  31%|███       | 226/730 [00:05<00:09, 51.99it/s]Loading weights:  32%|███▏      | 232/730 [00:05<00:10, 49.35it/s]Loading weights:  33%|███▎      | 244/730 [00:05<00:09, 51.09it/s]Loading weights:  35%|███▌      | 256/730 [00:05<00:08, 58.01it/s]Loading weights:  36%|███▌      | 262/730 [00:05<00:08, 53.87it/s]Loading weights:  37%|███▋      | 269/730 [00:06<00:09, 50.84it/s]Loading weights:  38%|███▊      | 276/730 [00:06<00:08, 54.80it/s]Loading weights:  39%|███▊      | 282/730 [00:06<00:09, 46.02it/s]Loading weights:  40%|████      | 292/730 [00:06<00:08, 51.40it/s]Loading weights:  42%|████▏     | 304/730 [00:06<00:08, 52.58it/s]Loading weights:  43%|████▎     | 316/730 [00:06<00:07, 58.20it/s]Loading weights:  44%|████▍     | 322/730 [00:07<00:07, 52.29it/s]Loading weights:  45%|████▍     | 328/730 [00:07<00:08, 49.56it/s]Loading weights:  47%|████▋     | 344/730 [00:07<00:05, 72.09it/s]Loading weights:  56%|█████▌    | 407/730 [00:07<00:01, 197.92it/s]Loading weights:  65%|██████▌   | 475/730 [00:07<00:00, 312.98it/s]Loading weights:  74%|███████▎  | 537/730 [00:07<00:00, 388.55it/s]Loading weights:  82%|████████▏ | 599/730 [00:07<00:00, 446.00it/s]Loading weights:  91%|█████████▏| 667/730 [00:07<00:00, 505.46it/s]Loading weights:  99%|█████████▉| 725/730 [00:08<00:00, 503.93it/s]Loading weights: 100%|██████████| 730/730 [00:08<00:00, 90.60it/s] 
+✓ Model loaded successfully
+
+Batches:   0%|          | 0/421 [00:00<?, ?it/s]Batches:   0%|          | 1/421 [00:02<17:04,  2.44s/it]Batches:   0%|          | 2/421 [00:04<15:27,  2.21s/it]Batches:   1%|          | 3/421 [00:06<16:09,  2.32s/it]Batches:   1%|          | 4/421 [00:09<16:32,  2.38s/it]Batches:   1%|          | 5/421 [00:11<16:12,  2.34s/it]Batches:   1%|▏         | 6/421 [00:14<16:30,  2.39s/it]Batches:   2%|▏         | 7/421 [00:16<16:03,  2.33s/it]Batches:   2%|▏         | 8/421 [00:18<15:34,  2.26s/it]Batches:   2%|▏         | 9/421 [00:20<15:44,  2.29s/it]Batches:   2%|▏         | 10/421 [00:23<15:58,  2.33s/it]Batches:   3%|▎         | 11/421 [00:25<15:43,  2.30s/it]Batches:   3%|▎         | 12/421 [00:27<15:32,  2.28s/it]Batches:   3%|▎         | 13/421 [00:30<15:55,  2.34s/it]Batches:   3%|▎         | 14/421 [00:32<16:21,  2.41s/it]Batches:   4%|▎         | 15/421 [00:35<16:20,  2.41s/it]Batches:   4%|▍         | 16/421 [00:37<16:41,  2.47s/it]Batches:   4%|▍         | 17/421 [00:40<16:49,  2.50s/it]Batches:   4%|▍         | 18/421 [00:42<16:27,  2.45s/it]Batches:   5%|▍         | 19/421 [00:45<16:19,  2.44s/it]Batches:   5%|▍         | 20/421 [00:47<16:15,  2.43s/it]Batches:   5%|▍         | 21/421 [00:49<15:29,  2.32s/it]Batches:   5%|▌         | 22/421 [00:51<15:30,  2.33s/it]Batches:   5%|▌         | 23/421 [00:54<15:49,  2.38s/it]Batches:   6%|▌         | 24/421 [00:56<15:51,  2.40s/it]Batches:   6%|▌         | 25/421 [00:59<15:39,  2.37s/it]Batches:   6%|▌         | 26/421 [01:01<15:36,  2.37s/it]Batches:   6%|▋         | 27/421 [01:03<15:37,  2.38s/it]Batches:   7%|▋         | 28/421 [01:06<16:03,  2.45s/it]Batches:   7%|▋         | 29/421 [01:09<16:21,  2.50s/it]Batches:   7%|▋         | 30/421 [01:11<16:28,  2.53s/it]Batches:   7%|▋         | 31/421 [01:14<16:27,  2.53s/it]Batches:   8%|▊         | 32/421 [01:16<16:17,  2.51s/it]Batches:   8%|▊         | 33/421 [01:19<15:59,  2.47s/it]Batches:   8%|▊         | 34/421 [01:21<15:52,  2.46s/it]Batches:   8%|▊         | 35/421 [01:23<15:13,  2.37s/it]Batches:   9%|▊         | 36/421 [01:26<15:01,  2.34s/it]Batches:   9%|▉         | 37/421 [01:28<15:02,  2.35s/it]Batches:   9%|▉         | 38/421 [01:30<14:52,  2.33s/it]Batches:   9%|▉         | 39/421 [01:33<14:59,  2.35s/it]Batches:  10%|▉         | 40/421 [01:35<14:56,  2.35s/it]Batches:  10%|▉         | 41/421 [01:38<15:20,  2.42s/it]Batches:  10%|▉         | 42/421 [01:40<14:50,  2.35s/it]Batches:  10%|█         | 43/421 [01:42<14:33,  2.31s/it]Batches:  10%|█         | 44/421 [01:44<14:40,  2.34s/it]Batches:  11%|█         | 45/421 [01:47<14:26,  2.30s/it]Batches:  11%|█         | 46/421 [01:49<14:15,  2.28s/it]Batches:  11%|█         | 47/421 [01:51<14:38,  2.35s/it]Batches:  11%|█▏        | 48/421 [01:54<14:29,  2.33s/it]Batches:  12%|█▏        | 49/421 [01:56<14:31,  2.34s/it]Batches:  12%|█▏        | 50/421 [01:58<14:48,  2.40s/it]Batches:  12%|█▏        | 51/421 [02:01<14:57,  2.43s/it]Batches:  12%|█▏        | 52/421 [02:03<14:56,  2.43s/it]Batches:  13%|█▎        | 53/421 [02:06<14:53,  2.43s/it]Batches:  13%|█▎        | 54/421 [02:08<14:20,  2.35s/it]Batches:  13%|█▎        | 55/421 [02:10<14:30,  2.38s/it]Batches:  13%|█▎        | 56/421 [02:13<14:17,  2.35s/it]Batches:  14%|█▎        | 57/421 [02:15<14:33,  2.40s/it]Batches:  14%|█▍        | 58/421 [02:17<13:53,  2.30s/it]Batches:  14%|█▍        | 59/421 [02:20<13:54,  2.30s/it]Batches:  14%|█▍        | 60/421 [02:22<14:03,  2.34s/it]Batches:  14%|█▍        | 61/421 [02:24<14:11,  2.37s/it]Batches:  15%|█▍        | 62/421 [02:27<13:53,  2.32s/it]Batches:  15%|█▍        | 63/421 [02:29<13:48,  2.31s/it]Batches:  15%|█▌        | 64/421 [02:31<13:35,  2.28s/it]Batches:  15%|█▌        | 65/421 [02:34<13:46,  2.32s/it]Batches:  16%|█▌        | 66/421 [02:36<13:48,  2.33s/it]Batches:  16%|█▌        | 67/421 [02:39<14:14,  2.41s/it]Batches:  16%|█▌        | 68/421 [02:41<14:18,  2.43s/it]Batches:  16%|█▋        | 69/421 [02:43<13:59,  2.39s/it]Batches:  17%|█▋        | 70/421 [02:46<14:03,  2.40s/it]Batches:  17%|█▋        | 71/421 [02:48<14:03,  2.41s/it]Batches:  17%|█▋        | 72/421 [02:51<14:18,  2.46s/it]Batches:  17%|█▋        | 73/421 [02:53<14:09,  2.44s/it]Batches:  18%|█▊        | 74/421 [02:55<13:21,  2.31s/it]Batches:  18%|█▊        | 75/421 [02:58<13:23,  2.32s/it]Batches:  18%|█▊        | 76/421 [03:00<13:22,  2.32s/it]Batches:  18%|█▊        | 77/421 [03:03<13:54,  2.43s/it]Batches:  19%|█▊        | 78/421 [03:05<13:43,  2.40s/it]Batches:  19%|█▉        | 79/421 [03:07<13:21,  2.34s/it]Batches:  19%|█▉        | 80/421 [03:09<12:56,  2.28s/it]Batches:  19%|█▉        | 81/421 [03:11<12:45,  2.25s/it]Batches:  19%|█▉        | 82/421 [03:14<13:01,  2.31s/it]Batches:  20%|█▉        | 83/421 [03:16<13:08,  2.33s/it]Batches:  20%|█▉        | 84/421 [03:18<12:34,  2.24s/it]Batches:  20%|██        | 85/421 [03:21<12:55,  2.31s/it]Batches:  20%|██        | 86/421 [03:23<12:55,  2.31s/it]Batches:  21%|██        | 87/421 [03:26<13:11,  2.37s/it]Batches:  21%|██        | 88/421 [03:28<13:05,  2.36s/it]Batches:  21%|██        | 89/421 [03:30<12:55,  2.34s/it]Batches:  21%|██▏       | 90/421 [03:32<12:43,  2.31s/it]Batches:  22%|██▏       | 91/421 [03:35<12:44,  2.32s/it]Batches:  22%|██▏       | 92/421 [03:37<12:29,  2.28s/it]Batches:  22%|██▏       | 93/421 [03:39<12:30,  2.29s/it]Batches:  22%|██▏       | 94/421 [03:42<12:41,  2.33s/it]Batches:  23%|██▎       | 95/421 [03:44<12:38,  2.33s/it]Batches:  23%|██▎       | 96/421 [03:46<12:32,  2.31s/it]Batches:  23%|██▎       | 97/421 [03:49<12:32,  2.32s/it]Batches:  23%|██▎       | 98/421 [03:51<12:21,  2.30s/it]Batches:  24%|██▎       | 99/421 [03:53<12:12,  2.28s/it]Batches:  24%|██▍       | 100/421 [03:55<12:14,  2.29s/it]Batches:  24%|██▍       | 101/421 [03:58<12:38,  2.37s/it]Batches:  24%|██▍       | 102/421 [04:00<12:25,  2.34s/it]Batches:  24%|██▍       | 103/421 [04:02<12:15,  2.31s/it]Batches:  25%|██▍       | 104/421 [04:05<12:16,  2.32s/it]Batches:  25%|██▍       | 105/421 [04:07<11:52,  2.25s/it]Batches:  25%|██▌       | 106/421 [04:09<11:49,  2.25s/it]Batches:  25%|██▌       | 107/421 [04:11<11:55,  2.28s/it]Batches:  26%|██▌       | 108/421 [04:14<11:40,  2.24s/it]Batches:  26%|██▌       | 109/421 [04:16<11:56,  2.30s/it]Batches:  26%|██▌       | 110/421 [04:18<11:58,  2.31s/it]Batches:  26%|██▋       | 111/421 [04:21<12:08,  2.35s/it]Batches:  27%|██▋       | 112/421 [04:23<12:10,  2.36s/it]Batches:  27%|██▋       | 113/421 [04:26<12:09,  2.37s/it]Batches:  27%|██▋       | 114/421 [04:28<11:53,  2.32s/it]Batches:  27%|██▋       | 115/421 [04:30<11:42,  2.30s/it]Batches:  28%|██▊       | 116/421 [04:33<11:55,  2.35s/it]Batches:  28%|██▊       | 117/421 [04:35<11:54,  2.35s/it]Batches:  28%|██▊       | 118/421 [04:37<12:03,  2.39s/it]Batches:  28%|██▊       | 119/421 [04:40<11:59,  2.38s/it]Batches:  29%|██▊       | 120/421 [04:42<11:41,  2.33s/it]Batches:  29%|██▊       | 121/421 [04:44<11:47,  2.36s/it]Batches:  29%|██▉       | 122/421 [04:47<11:58,  2.40s/it]Batches:  29%|██▉       | 123/421 [04:49<12:02,  2.43s/it]Batches:  29%|██▉       | 124/421 [04:52<11:43,  2.37s/it]Batches:  30%|██▉       | 125/421 [04:54<11:34,  2.35s/it]Batches:  30%|██▉       | 126/421 [04:56<11:33,  2.35s/it]Batches:  30%|███       | 127/421 [04:59<11:45,  2.40s/it]Batches:  30%|███       | 128/421 [05:01<11:39,  2.39s/it]Batches:  31%|███       | 129/421 [05:04<12:04,  2.48s/it]Batches:  31%|███       | 130/421 [05:06<12:00,  2.48s/it]Batches:  31%|███       | 131/421 [05:09<12:03,  2.50s/it]Batches:  31%|███▏      | 132/421 [05:11<11:41,  2.43s/it]Batches:  32%|███▏      | 133/421 [05:13<11:30,  2.40s/it]Batches:  32%|███▏      | 134/421 [05:16<11:00,  2.30s/it]Batches:  32%|███▏      | 135/421 [05:18<11:07,  2.33s/it]Batches:  32%|███▏      | 136/421 [05:20<11:11,  2.35s/it]Batches:  33%|███▎      | 137/421 [05:23<11:18,  2.39s/it]Batches:  33%|███▎      | 138/421 [05:25<11:24,  2.42s/it]Batches:  33%|███▎      | 139/421 [05:28<11:25,  2.43s/it]Batches:  33%|███▎      | 140/421 [05:30<11:34,  2.47s/it]Batches:  33%|███▎      | 141/421 [05:33<11:32,  2.47s/it]Batches:  34%|███▎      | 142/421 [05:35<11:22,  2.45s/it]Batches:  34%|███▍      | 143/421 [05:37<11:06,  2.40s/it]Batches:  34%|███▍      | 144/421 [05:40<10:52,  2.36s/it]Batches:  34%|███▍      | 145/421 [05:42<11:06,  2.42s/it]Batches:  35%|███▍      | 146/421 [05:45<11:07,  2.43s/it]Batches:  35%|███▍      | 147/421 [05:47<10:56,  2.40s/it]Batches:  35%|███▌      | 148/421 [05:50<11:00,  2.42s/it]Batches:  35%|███▌      | 149/421 [05:52<10:50,  2.39s/it]Batches:  36%|███▌      | 150/421 [05:54<11:05,  2.46s/it]Batches:  36%|███▌      | 151/421 [05:57<10:57,  2.44s/it]Batches:  36%|███▌      | 152/421 [05:59<10:51,  2.42s/it]Batches:  36%|███▋      | 153/421 [06:02<10:46,  2.41s/it]Batches:  37%|███▋      | 154/421 [06:04<10:38,  2.39s/it]Batches:  37%|███▋      | 155/421 [06:06<10:28,  2.36s/it]Batches:  37%|███▋      | 156/421 [06:08<10:11,  2.31s/it]Batches:  37%|███▋      | 157/421 [06:11<10:11,  2.31s/it]Batches:  38%|███▊      | 158/421 [06:13<10:07,  2.31s/it]Batches:  38%|███▊      | 159/421 [06:15<09:57,  2.28s/it]Batches:  38%|███▊      | 160/421 [06:18<10:00,  2.30s/it]Batches:  38%|███▊      | 161/421 [06:20<10:05,  2.33s/it]Batches:  38%|███▊      | 162/421 [06:22<10:12,  2.36s/it]Batches:  39%|███▊      | 163/421 [06:25<09:51,  2.29s/it]Batches:  39%|███▉      | 164/421 [06:27<09:56,  2.32s/it]Batches:  39%|███▉      | 165/421 [06:29<10:02,  2.35s/it]Batches:  39%|███▉      | 166/421 [06:32<09:53,  2.33s/it]Batches:  40%|███▉      | 167/421 [06:34<10:17,  2.43s/it]Batches:  40%|███▉      | 168/421 [06:37<10:14,  2.43s/it]Batches:  40%|████      | 169/421 [06:39<09:55,  2.36s/it]Batches:  40%|████      | 170/421 [06:41<09:42,  2.32s/it]Batches:  41%|████      | 171/421 [06:44<09:43,  2.33s/it]Batches:  41%|████      | 172/421 [06:46<09:45,  2.35s/it]Batches:  41%|████      | 173/421 [06:48<09:47,  2.37s/it]Batches:  41%|████▏     | 174/421 [06:51<09:36,  2.33s/it]Batches:  42%|████▏     | 175/421 [06:53<09:40,  2.36s/it]Batches:  42%|████▏     | 176/421 [06:55<09:39,  2.36s/it]Batches:  42%|████▏     | 177/421 [06:58<09:25,  2.32s/it]Batches:  42%|████▏     | 178/421 [07:00<09:34,  2.37s/it]Batches:  43%|████▎     | 179/421 [07:02<09:26,  2.34s/it]Batches:  43%|████▎     | 180/421 [07:05<09:29,  2.36s/it]Batches:  43%|████▎     | 181/421 [07:07<09:32,  2.39s/it]Batches:  43%|████▎     | 182/421 [07:09<09:14,  2.32s/it]Batches:  43%|████▎     | 183/421 [07:12<09:12,  2.32s/it]Batches:  44%|████▎     | 184/421 [07:14<09:12,  2.33s/it]Batches:  44%|████▍     | 185/421 [07:16<08:58,  2.28s/it]Batches:  44%|████▍     | 186/421 [07:18<08:42,  2.22s/it]Batches:  44%|████▍     | 187/421 [07:21<08:49,  2.26s/it]Batches:  45%|████▍     | 188/421 [07:23<08:54,  2.29s/it]Batches:  45%|████▍     | 189/421 [07:25<08:32,  2.21s/it]Batches:  45%|████▌     | 190/421 [07:28<08:49,  2.29s/it]Batches:  45%|████▌     | 191/421 [07:30<08:51,  2.31s/it]Batches:  46%|████▌     | 192/421 [07:32<08:58,  2.35s/it]Batches:  46%|████▌     | 193/421 [07:35<08:54,  2.34s/it]Batches:  46%|████▌     | 194/421 [07:37<08:45,  2.31s/it]Batches:  46%|████▋     | 195/421 [07:39<08:50,  2.35s/it]Batches:  47%|████▋     | 196/421 [07:42<08:38,  2.31s/it]Batches:  47%|████▋     | 197/421 [07:44<08:38,  2.31s/it]Batches:  47%|████▋     | 198/421 [07:46<08:31,  2.30s/it]Batches:  47%|████▋     | 199/421 [07:48<08:22,  2.26s/it]Batches:  48%|████▊     | 200/421 [07:51<08:18,  2.26s/it]Batches:  48%|████▊     | 201/421 [07:53<08:12,  2.24s/it]Batches:  48%|████▊     | 202/421 [07:55<08:28,  2.32s/it]Batches:  48%|████▊     | 203/421 [07:58<08:31,  2.35s/it]Batches:  48%|████▊     | 204/421 [08:00<08:25,  2.33s/it]Batches:  49%|████▊     | 205/421 [08:02<08:13,  2.29s/it]Batches:  49%|████▉     | 206/421 [08:04<08:14,  2.30s/it]Batches:  49%|████▉     | 207/421 [08:07<08:20,  2.34s/it]Batches:  49%|████▉     | 208/421 [08:09<08:09,  2.30s/it]Batches:  50%|████▉     | 209/421 [08:11<08:09,  2.31s/it]Batches:  50%|████▉     | 210/421 [08:14<08:01,  2.28s/it]Batches:  50%|█████     | 211/421 [08:16<08:06,  2.32s/it]Batches:  50%|█████     | 212/421 [08:18<08:07,  2.33s/it]Batches:  51%|█████     | 213/421 [08:21<08:22,  2.42s/it]Batches:  51%|█████     | 214/421 [08:23<07:48,  2.26s/it]Batches:  51%|█████     | 215/421 [08:25<07:57,  2.32s/it]Batches:  51%|█████▏    | 216/421 [08:28<08:09,  2.39s/it]Batches:  52%|█████▏    | 217/421 [08:30<07:53,  2.32s/it]Batches:  52%|█████▏    | 218/421 [08:33<07:54,  2.34s/it]Batches:  52%|█████▏    | 219/421 [08:35<07:45,  2.30s/it]Batches:  52%|█████▏    | 220/421 [08:37<07:45,  2.32s/it]Batches:  52%|█████▏    | 221/421 [08:40<07:53,  2.37s/it]Batches:  53%|█████▎    | 222/421 [08:42<07:51,  2.37s/it]Batches:  53%|█████▎    | 223/421 [08:44<07:58,  2.42s/it]Batches:  53%|█████▎    | 224/421 [08:47<08:01,  2.44s/it]Batches:  53%|█████▎    | 225/421 [08:50<08:06,  2.48s/it]Batches:  54%|█████▎    | 226/421 [08:52<08:03,  2.48s/it]Batches:  54%|█████▍    | 227/421 [08:54<07:57,  2.46s/it]Batches:  54%|█████▍    | 228/421 [08:57<07:45,  2.41s/it]Batches:  54%|█████▍    | 229/421 [08:59<07:26,  2.32s/it]Batches:  55%|█████▍    | 230/421 [09:01<07:22,  2.32s/it]Batches:  55%|█████▍    | 231/421 [09:03<07:08,  2.26s/it]Batches:  55%|█████▌    | 232/421 [09:06<07:21,  2.33s/it]Batches:  55%|█████▌    | 233/421 [09:08<07:18,  2.33s/it]Batches:  56%|█████▌    | 234/421 [09:11<07:20,  2.36s/it]Batches:  56%|█████▌    | 235/421 [09:13<07:24,  2.39s/it]Batches:  56%|█████▌    | 236/421 [09:15<07:24,  2.40s/it]Batches:  56%|█████▋    | 237/421 [09:18<07:08,  2.33s/it]Batches:  57%|█████▋    | 238/421 [09:20<07:05,  2.33s/it]Batches:  57%|█████▋    | 239/421 [09:22<07:10,  2.36s/it]Batches:  57%|█████▋    | 240/421 [09:25<07:05,  2.35s/it]Batches:  57%|█████▋    | 241/421 [09:27<07:09,  2.38s/it]Batches:  57%|█████▋    | 242/421 [09:30<07:06,  2.38s/it]Batches:  58%|█████▊    | 243/421 [09:32<07:10,  2.42s/it]Batches:  58%|█████▊    | 244/421 [09:34<06:49,  2.31s/it]Batches:  58%|█████▊    | 245/421 [09:36<06:43,  2.29s/it]Batches:  58%|█████▊    | 246/421 [09:39<06:58,  2.39s/it]Batches:  59%|█████▊    | 247/421 [09:42<07:05,  2.45s/it]Batches:  59%|█████▉    | 248/421 [09:44<07:04,  2.45s/it]Batches:  59%|█████▉    | 249/421 [09:47<07:08,  2.49s/it]Batches:  59%|█████▉    | 250/421 [09:49<06:56,  2.44s/it]Batches:  60%|█████▉    | 251/421 [09:51<06:50,  2.41s/it]Batches:  60%|█████▉    | 252/421 [09:53<06:37,  2.35s/it]Batches:  60%|██████    | 253/421 [09:56<06:40,  2.38s/it]Batches:  60%|██████    | 254/421 [09:58<06:36,  2.38s/it]Batches:  61%|██████    | 255/421 [10:01<06:34,  2.38s/it]Batches:  61%|██████    | 256/421 [10:03<06:32,  2.38s/it]Batches:  61%|██████    | 257/421 [10:05<06:28,  2.37s/it]Batches:  61%|██████▏   | 258/421 [10:08<06:30,  2.40s/it]Batches:  62%|██████▏   | 259/421 [10:10<06:27,  2.39s/it]Batches:  62%|██████▏   | 260/421 [10:13<06:23,  2.38s/it]Batches:  62%|██████▏   | 261/421 [10:15<06:18,  2.36s/it]Batches:  62%|██████▏   | 262/421 [10:17<05:58,  2.26s/it]Batches:  62%|██████▏   | 263/421 [10:19<05:58,  2.27s/it]Batches:  63%|██████▎   | 264/421 [10:22<06:01,  2.30s/it]Batches:  63%|██████▎   | 265/421 [10:24<05:59,  2.30s/it]Batches:  63%|██████▎   | 266/421 [10:26<05:56,  2.30s/it]Batches:  63%|██████▎   | 267/421 [10:29<05:57,  2.32s/it]Batches:  64%|██████▎   | 268/421 [10:31<05:48,  2.27s/it]Batches:  64%|██████▍   | 269/421 [10:33<05:51,  2.31s/it]Batches:  64%|██████▍   | 270/421 [10:35<05:43,  2.27s/it]Batches:  64%|██████▍   | 271/421 [10:38<05:54,  2.36s/it]Batches:  65%|██████▍   | 272/421 [10:40<05:51,  2.36s/it]Batches:  65%|██████▍   | 273/421 [10:43<05:54,  2.40s/it]Batches:  65%|██████▌   | 274/421 [10:45<05:50,  2.38s/it]Batches:  65%|██████▌   | 275/421 [10:47<05:43,  2.35s/it]Batches:  66%|██████▌   | 276/421 [10:50<05:43,  2.37s/it]Batches:  66%|██████▌   | 277/421 [10:52<05:48,  2.42s/it]Batches:  66%|██████▌   | 278/421 [10:55<05:39,  2.38s/it]Batches:  66%|██████▋   | 279/421 [10:57<05:40,  2.40s/it]Batches:  67%|██████▋   | 280/421 [11:00<05:45,  2.45s/it]Batches:  67%|██████▋   | 281/421 [11:02<05:40,  2.43s/it]Batches:  67%|██████▋   | 282/421 [11:04<05:38,  2.44s/it]Batches:  67%|██████▋   | 283/421 [11:07<05:36,  2.44s/it]Batches:  67%|██████▋   | 284/421 [11:09<05:27,  2.39s/it]Batches:  68%|██████▊   | 285/421 [11:11<05:20,  2.36s/it]Batches:  68%|██████▊   | 286/421 [11:14<05:13,  2.32s/it]Batches:  68%|██████▊   | 287/421 [11:16<05:13,  2.34s/it]Batches:  68%|██████▊   | 288/421 [11:18<05:15,  2.37s/it]Batches:  69%|██████▊   | 289/421 [11:21<05:05,  2.32s/it]Batches:  69%|██████▉   | 290/421 [11:23<05:04,  2.32s/it]Batches:  69%|██████▉   | 291/421 [11:25<04:56,  2.28s/it]Batches:  69%|██████▉   | 292/421 [11:27<04:54,  2.28s/it]Batches:  70%|██████▉   | 293/421 [11:30<04:53,  2.29s/it]Batches:  70%|██████▉   | 294/421 [11:32<04:54,  2.32s/it]Batches:  70%|███████   | 295/421 [11:35<04:54,  2.34s/it]Batches:  70%|███████   | 296/421 [11:37<04:48,  2.31s/it]Batches:  71%|███████   | 297/421 [11:39<04:50,  2.34s/it]Batches:  71%|███████   | 298/421 [11:41<04:44,  2.32s/it]Batches:  71%|███████   | 299/421 [11:44<04:44,  2.34s/it]Batches:  71%|███████▏  | 300/421 [11:46<04:33,  2.26s/it]Batches:  71%|███████▏  | 301/421 [11:49<04:43,  2.36s/it]Batches:  72%|███████▏  | 302/421 [11:51<04:42,  2.38s/it]Batches:  72%|███████▏  | 303/421 [11:53<04:42,  2.39s/it]Batches:  72%|███████▏  | 304/421 [11:56<04:36,  2.36s/it]Batches:  72%|███████▏  | 305/421 [11:58<04:32,  2.35s/it]Batches:  73%|███████▎  | 306/421 [12:00<04:24,  2.30s/it]Batches:  73%|███████▎  | 307/421 [12:03<04:26,  2.34s/it]Batches:  73%|███████▎  | 308/421 [12:05<04:30,  2.39s/it]Batches:  73%|███████▎  | 309/421 [12:08<04:31,  2.42s/it]Batches:  74%|███████▎  | 310/421 [12:10<04:27,  2.41s/it]Batches:  74%|███████▍  | 311/421 [12:12<04:26,  2.43s/it]Batches:  74%|███████▍  | 312/421 [12:15<04:20,  2.39s/it]Batches:  74%|███████▍  | 313/421 [12:17<04:25,  2.46s/it]Batches:  75%|███████▍  | 314/421 [12:20<04:22,  2.46s/it]Batches:  75%|███████▍  | 315/421 [12:22<04:19,  2.45s/it]Batches:  75%|███████▌  | 316/421 [12:25<04:18,  2.47s/it]Batches:  75%|███████▌  | 317/421 [12:27<04:15,  2.46s/it]Batches:  76%|███████▌  | 318/421 [12:29<04:02,  2.35s/it]Batches:  76%|███████▌  | 319/421 [12:32<04:03,  2.39s/it]Batches:  76%|███████▌  | 320/421 [12:34<03:52,  2.30s/it]Batches:  76%|███████▌  | 321/421 [12:36<03:54,  2.35s/it]Batches:  76%|███████▋  | 322/421 [12:39<03:50,  2.32s/it]Batches:  77%|███████▋  | 323/421 [12:41<03:46,  2.31s/it]Batches:  77%|███████▋  | 324/421 [12:43<03:42,  2.30s/it]Batches:  77%|███████▋  | 325/421 [12:45<03:31,  2.20s/it]Batches:  77%|███████▋  | 326/421 [12:48<03:35,  2.26s/it]Batches:  78%|███████▊  | 327/421 [12:50<03:35,  2.29s/it]Batches:  78%|███████▊  | 328/421 [12:52<03:35,  2.32s/it]Batches:  78%|███████▊  | 329/421 [12:55<03:35,  2.34s/it]Batches:  78%|███████▊  | 330/421 [12:57<03:36,  2.38s/it]Batches:  79%|███████▊  | 331/421 [12:59<03:32,  2.36s/it]Batches:  79%|███████▉  | 332/421 [13:02<03:30,  2.37s/it]Batches:  79%|███████▉  | 333/421 [13:04<03:29,  2.38s/it]Batches:  79%|███████▉  | 334/421 [13:07<03:23,  2.34s/it]Batches:  80%|███████▉  | 335/421 [13:09<03:22,  2.35s/it]Batches:  80%|███████▉  | 336/421 [13:11<03:19,  2.35s/it]Batches:  80%|████████  | 337/421 [13:13<03:11,  2.27s/it]Batches:  80%|████████  | 338/421 [13:16<03:14,  2.35s/it]Batches:  81%|████████  | 339/421 [13:19<03:20,  2.45s/it]Batches:  81%|████████  | 340/421 [13:21<03:13,  2.39s/it]Batches:  81%|████████  | 341/421 [13:23<03:08,  2.36s/it]Batches:  81%|████████  | 342/421 [13:25<03:02,  2.31s/it]Batches:  81%|████████▏ | 343/421 [13:28<03:01,  2.33s/it]Batches:  82%|████████▏ | 344/421 [13:30<02:59,  2.33s/it]Batches:  82%|████████▏ | 345/421 [13:32<02:59,  2.36s/it]Batches:  82%|████████▏ | 346/421 [13:35<02:55,  2.34s/it]Batches:  82%|████████▏ | 347/421 [13:37<02:54,  2.36s/it]Batches:  83%|████████▎ | 348/421 [13:39<02:46,  2.28s/it]Batches:  83%|████████▎ | 349/421 [13:42<02:51,  2.38s/it]Batches:  83%|████████▎ | 350/421 [13:44<02:50,  2.41s/it]Batches:  83%|████████▎ | 351/421 [13:47<02:46,  2.37s/it]Batches:  84%|████████▎ | 352/421 [13:49<02:45,  2.41s/it]Batches:  84%|████████▍ | 353/421 [13:52<02:44,  2.42s/it]Batches:  84%|████████▍ | 354/421 [13:54<02:42,  2.42s/it]Batches:  84%|████████▍ | 355/421 [13:57<02:43,  2.47s/it]Batches:  85%|████████▍ | 356/421 [13:59<02:39,  2.45s/it]Batches:  85%|████████▍ | 357/421 [14:01<02:33,  2.40s/it]Batches:  85%|████████▌ | 358/421 [14:04<02:30,  2.39s/it]Batches:  85%|████████▌ | 359/421 [14:06<02:30,  2.42s/it]Batches:  86%|████████▌ | 360/421 [14:08<02:25,  2.38s/it]Batches:  86%|████████▌ | 361/421 [14:11<02:23,  2.39s/it]Batches:  86%|████████▌ | 362/421 [14:13<02:19,  2.36s/it]Batches:  86%|████████▌ | 363/421 [14:15<02:15,  2.33s/it]Batches:  86%|████████▋ | 364/421 [14:18<02:10,  2.29s/it]Batches:  87%|████████▋ | 365/421 [14:20<02:08,  2.30s/it]Batches:  87%|████████▋ | 366/421 [14:22<02:08,  2.34s/it]Batches:  87%|████████▋ | 367/421 [14:25<02:05,  2.32s/it]Batches:  87%|████████▋ | 368/421 [14:27<02:02,  2.31s/it]Batches:  88%|████████▊ | 369/421 [14:29<01:58,  2.29s/it]Batches:  88%|████████▊ | 370/421 [14:31<01:54,  2.24s/it]Batches:  88%|████████▊ | 371/421 [14:34<01:53,  2.26s/it]Batches:  88%|████████▊ | 372/421 [14:36<01:48,  2.21s/it]Batches:  89%|████████▊ | 373/421 [14:38<01:46,  2.23s/it]Batches:  89%|████████▉ | 374/421 [14:40<01:46,  2.26s/it]Batches:  89%|████████▉ | 375/421 [14:43<01:44,  2.28s/it]Batches:  89%|████████▉ | 376/421 [14:45<01:45,  2.33s/it]Batches:  90%|████████▉ | 377/421 [14:47<01:43,  2.36s/it]Batches:  90%|████████▉ | 378/421 [14:50<01:41,  2.35s/it]Batches:  90%|█████████ | 379/421 [14:52<01:38,  2.34s/it]Batches:  90%|█████████ | 380/421 [14:54<01:35,  2.32s/it]Batches:  90%|█████████ | 381/421 [14:57<01:32,  2.32s/it]Batches:  91%|█████████ | 382/421 [14:59<01:33,  2.41s/it]Batches:  91%|█████████ | 383/421 [15:02<01:30,  2.39s/it]Batches:  91%|█████████ | 384/421 [15:04<01:27,  2.36s/it]Batches:  91%|█████████▏| 385/421 [15:06<01:26,  2.40s/it]Batches:  92%|█████████▏| 386/421 [15:09<01:22,  2.36s/it]Batches:  92%|█████████▏| 387/421 [15:11<01:21,  2.40s/it]Batches:  92%|█████████▏| 388/421 [15:13<01:18,  2.37s/it]Batches:  92%|█████████▏| 389/421 [15:16<01:14,  2.34s/it]Batches:  93%|█████████▎| 390/421 [15:18<01:13,  2.37s/it]Batches:  93%|█████████▎| 391/421 [15:20<01:10,  2.34s/it]Batches:  93%|█████████▎| 392/421 [15:23<01:08,  2.35s/it]Batches:  93%|█████████▎| 393/421 [15:25<01:05,  2.34s/it]Batches:  94%|█████████▎| 394/421 [15:28<01:04,  2.39s/it]Batches:  94%|█████████▍| 395/421 [15:30<01:00,  2.31s/it]Batches:  94%|█████████▍| 396/421 [15:32<00:58,  2.35s/it]Batches:  94%|█████████▍| 397/421 [15:35<00:57,  2.38s/it]Batches:  95%|█████████▍| 398/421 [15:37<00:55,  2.43s/it]Batches:  95%|█████████▍| 399/421 [15:40<00:52,  2.40s/it]Batches:  95%|█████████▌| 400/421 [15:42<00:49,  2.38s/it]Batches:  95%|█████████▌| 401/421 [15:44<00:46,  2.31s/it]Batches:  95%|█████████▌| 402/421 [15:46<00:42,  2.26s/it]Batches:  96%|█████████▌| 403/421 [15:49<00:41,  2.29s/it]Batches:  96%|█████████▌| 404/421 [15:51<00:40,  2.36s/it]Batches:  96%|█████████▌| 405/421 [15:53<00:37,  2.33s/it]Batches:  96%|█████████▋| 406/421 [15:56<00:34,  2.33s/it]Batches:  97%|█████████▋| 407/421 [15:58<00:31,  2.28s/it]Batches:  97%|█████████▋| 408/421 [16:00<00:30,  2.33s/it]Batches:  97%|█████████▋| 409/421 [16:03<00:27,  2.33s/it]Batches:  97%|█████████▋| 410/421 [16:05<00:25,  2.29s/it]Batches:  98%|█████████▊| 411/421 [16:07<00:23,  2.30s/it]Batches:  98%|█████████▊| 412/421 [16:10<00:21,  2.42s/it]Batches:  98%|█████████▊| 413/421 [16:12<00:18,  2.35s/it]Batches:  98%|█████████▊| 414/421 [16:14<00:16,  2.33s/it]Batches:  99%|█████████▊| 415/421 [16:17<00:14,  2.36s/it]Batches:  99%|█████████▉| 416/421 [16:19<00:11,  2.35s/it]Batches:  99%|█████████▉| 417/421 [16:22<00:09,  2.42s/it]Batches:  99%|█████████▉| 418/421 [16:24<00:07,  2.34s/it]Batches: 100%|█████████▉| 419/421 [16:26<00:04,  2.31s/it]Batches: 100%|█████████▉| 420/421 [16:28<00:02,  2.33s/it]Batches: 100%|██████████| 421/421 [16:30<00:00,  2.26s/it]Batches: 100%|██████████| 421/421 [16:30<00:00,  2.35s/it]
+
+======================================================================
+✓ Successfully processed: 3366/3366
+✗ Skipped (missing/error): 0/3366
+
+Extracted shapes:
+  Positive: (3366, 3584)
+  Negative: (3366, 3584)
+  Labels: (3366,)
+
+Cached to: hidden_states_cache_final/cache_attribute_recognition_3366_qwen2_ccs_aligned.npz
+
+Logistic regression sanity-check accuracy: 77.8%
+
+======================================================================
+TRAINING CCS PROBE
+======================================================================
+
+Dataset split:
+  Train: 2019 samples (1030 pos, 989 neg)
+  Test:  1347 samples (653 pos, 694 neg)
+  Hidden dim: 3584
+
+======================================================================
+TRAINING WITH MULTIPLE RANDOM RESTARTS
+======================================================================
+  Trial  1/10: Loss = 0.007007
+  Trial  2/10: Loss = 0.002527
+  Trial  3/10: Loss = 0.001526
+  Trial  4/10: Loss = 0.003509
+  Trial  5/10: Loss = 0.011409
+  Trial  6/10: Loss = 0.001516
+  Trial  7/10: Loss = 0.003003
+  Trial  8/10: Loss = 0.004485
+  Trial  9/10: Loss = 0.002015
+  Trial 10/10: Loss = 0.003503
+
+======================================================================
+EVALUATION WITH BEST PROBE
+======================================================================
+Best loss: 0.001516
+
+Test Results:
+  Overall Accuracy: 82.0% (1104/1347)
+  Positive samples: 84.5% (653 samples)
+  Negative samples: 79.5% (694 samples)
+
+✓ COMPLETE: attribute_recognition → 82.0%
+
+######################################################################
+# CATEGORY: SPATIAL_RECOGNITION
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: SPATIAL_RECOGNITION
+======================================================================
+⚠ No cache found. Starting extraction...
+
+Processing 976 samples in batches of 8
+Searching in 2 image directories
+LOADING MODEL: qwen2
+Device: cuda
+Fetching 5 files:   0%|          | 0/5 [00:00<?, ?it/s]Fetching 5 files: 100%|██████████| 5/5 [00:00<00:00, 1398.57it/s]
+Loading weights:   0%|          | 0/730 [00:00<?, ?it/s]Loading weights:   0%|          | 1/730 [00:00<05:36,  2.17it/s]Loading weights:   0%|          | 2/730 [00:01<06:09,  1.97it/s]Loading weights:   1%|          | 5/730 [00:01<02:07,  5.67it/s]Loading weights:   2%|▏         | 16/730 [00:01<00:38, 18.71it/s]Loading weights:   4%|▍         | 28/730 [00:01<00:24, 29.09it/s]Loading weights:   5%|▌         | 40/730 [00:01<00:18, 36.39it/s]Loading weights:   7%|▋         | 52/730 [00:01<00:14, 45.48it/s]Loading weights:   8%|▊         | 58/730 [00:02<00:15, 44.52it/s]Loading weights:   9%|▉         | 65/730 [00:02<00:14, 45.38it/s]Loading weights:  10%|█         | 76/730 [00:02<00:14, 46.60it/s]Loading weights:  12%|█▏        | 88/730 [00:02<00:13, 48.80it/s]Loading weights:  14%|█▎        | 100/730 [00:02<00:12, 50.15it/s]Loading weights:  15%|█▌        | 112/730 [00:03<00:12, 51.08it/s]Loading weights:  17%|█▋        | 124/730 [00:03<00:10, 56.91it/s]Loading weights:  18%|█▊        | 130/730 [00:03<00:11, 53.22it/s]Loading weights:  19%|█▉        | 137/730 [00:03<00:11, 51.89it/s]Loading weights:  20%|██        | 148/730 [00:03<00:10, 56.68it/s]Loading weights:  21%|██        | 154/730 [00:03<00:10, 52.38it/s]Loading weights:  22%|██▏       | 161/730 [00:04<00:11, 51.15it/s]Loading weights:  24%|██▎       | 172/730 [00:04<00:11, 48.78it/s]Loading weights:  25%|██▍       | 180/730 [00:04<00:10, 54.69it/s]Loading weights:  25%|██▌       | 186/730 [00:04<00:11, 46.25it/s]Loading weights:  27%|██▋       | 197/730 [00:04<00:10, 52.96it/s]Loading weights:  28%|██▊       | 207/730 [00:04<00:09, 56.12it/s]Loading weights:  29%|██▉       | 213/730 [00:05<00:09, 53.37it/s]Loading weights:  30%|███       | 221/730 [00:05<00:09, 51.21it/s]Loading weights:  32%|███▏      | 230/730 [00:05<00:08, 59.24it/s]Loading weights:  32%|███▏      | 237/730 [00:05<00:09, 50.56it/s]Loading weights:  34%|███▎      | 245/730 [00:05<00:09, 50.92it/s]Loading weights:  35%|███▌      | 256/730 [00:05<00:09, 50.57it/s]Loading weights:  37%|███▋      | 268/730 [00:06<00:08, 56.89it/s]Loading weights:  38%|███▊      | 274/730 [00:06<00:08, 51.33it/s]Loading weights:  38%|███▊      | 281/730 [00:06<00:09, 45.42it/s]Loading weights:  40%|████      | 293/730 [00:06<00:08, 53.99it/s]Loading weights:  42%|████▏     | 304/730 [00:06<00:07, 58.56it/s]Loading weights:  43%|████▎     | 311/730 [00:06<00:07, 56.10it/s]Loading weights:  43%|████▎     | 317/730 [00:07<00:08, 50.47it/s]Loading weights:  45%|████▍     | 325/730 [00:07<00:07, 56.70it/s]Loading weights:  45%|████▌     | 331/730 [00:07<00:08, 47.15it/s]Loading weights:  52%|█████▏    | 383/730 [00:07<00:02, 147.15it/s]Loading weights:  62%|██████▏   | 450/730 [00:07<00:01, 267.41it/s]Loading weights:  70%|███████   | 511/730 [00:07<00:00, 351.01it/s]Loading weights:  79%|███████▉  | 575/730 [00:07<00:00, 425.89it/s]Loading weights:  88%|████████▊ | 643/730 [00:07<00:00, 492.17it/s]Loading weights:  97%|█████████▋| 705/730 [00:07<00:00, 527.48it/s]Loading weights: 100%|██████████| 730/730 [00:08<00:00, 91.02it/s] 
+✓ Model loaded successfully
+
+Batches:   0%|          | 0/122 [00:00<?, ?it/s]Batches:   1%|          | 1/122 [00:02<04:19,  2.15s/it]Batches:   2%|▏         | 2/122 [00:04<04:18,  2.16s/it]Batches:   2%|▏         | 3/122 [00:06<04:38,  2.34s/it]Batches:   3%|▎         | 4/122 [00:09<04:37,  2.35s/it]Batches:   4%|▍         | 5/122 [00:11<04:35,  2.36s/it]Batches:   5%|▍         | 6/122 [00:13<04:30,  2.33s/it]Batches:   6%|▌         | 7/122 [00:16<04:25,  2.31s/it]Batches:   7%|▋         | 8/122 [00:18<04:24,  2.32s/it]Batches:   7%|▋         | 9/122 [00:20<04:24,  2.34s/it]Batches:   8%|▊         | 10/122 [00:23<04:24,  2.36s/it]Batches:   9%|▉         | 11/122 [00:25<04:27,  2.41s/it]Batches:  10%|▉         | 12/122 [00:28<04:22,  2.38s/it]Batches:  11%|█         | 13/122 [00:30<04:17,  2.37s/it]Batches:  11%|█▏        | 14/122 [00:32<04:11,  2.33s/it]Batches:  12%|█▏        | 15/122 [00:35<04:16,  2.40s/it]Batches:  13%|█▎        | 16/122 [00:37<04:16,  2.42s/it]Batches:  14%|█▍        | 17/122 [00:40<04:15,  2.44s/it]Batches:  15%|█▍        | 18/122 [00:42<04:12,  2.43s/it]Batches:  16%|█▌        | 19/122 [00:44<04:01,  2.34s/it]Batches:  16%|█▋        | 20/122 [00:47<04:05,  2.41s/it]Batches:  17%|█▋        | 21/122 [00:49<03:55,  2.33s/it]Batches:  18%|█▊        | 22/122 [00:52<04:00,  2.41s/it]Batches:  19%|█▉        | 23/122 [00:54<04:00,  2.43s/it]Batches:  20%|█▉        | 24/122 [00:56<03:52,  2.37s/it]Batches:  20%|██        | 25/122 [00:59<03:51,  2.38s/it]Batches:  21%|██▏       | 26/122 [01:01<03:58,  2.48s/it]Batches:  22%|██▏       | 27/122 [01:04<03:52,  2.45s/it]Batches:  23%|██▎       | 28/122 [01:06<03:42,  2.36s/it]Batches:  24%|██▍       | 29/122 [01:08<03:36,  2.32s/it]Batches:  25%|██▍       | 30/122 [01:10<03:33,  2.32s/it]Batches:  25%|██▌       | 31/122 [01:13<03:29,  2.30s/it]Batches:  26%|██▌       | 32/122 [01:15<03:30,  2.34s/it]Batches:  27%|██▋       | 33/122 [01:17<03:26,  2.32s/it]Batches:  28%|██▊       | 34/122 [01:20<03:31,  2.40s/it]Batches:  29%|██▊       | 35/122 [01:22<03:27,  2.38s/it]Batches:  30%|██▉       | 36/122 [01:25<03:23,  2.37s/it]Batches:  30%|███       | 37/122 [01:27<03:18,  2.34s/it]Batches:  31%|███       | 38/122 [01:29<03:15,  2.33s/it]Batches:  32%|███▏      | 39/122 [01:32<03:14,  2.34s/it]Batches:  33%|███▎      | 40/122 [01:34<03:11,  2.34s/it]Batches:  34%|███▎      | 41/122 [01:36<03:08,  2.33s/it]Batches:  34%|███▍      | 42/122 [01:39<03:04,  2.30s/it]Batches:  35%|███▌      | 43/122 [01:41<02:57,  2.24s/it]Batches:  36%|███▌      | 44/122 [01:43<02:56,  2.27s/it]Batches:  37%|███▋      | 45/122 [01:45<02:53,  2.26s/it]Batches:  38%|███▊      | 46/122 [01:47<02:48,  2.22s/it]Batches:  39%|███▊      | 47/122 [01:50<02:48,  2.25s/it]Batches:  39%|███▉      | 48/122 [01:52<02:46,  2.26s/it]Batches:  40%|████      | 49/122 [01:54<02:51,  2.35s/it]Batches:  41%|████      | 50/122 [01:57<02:47,  2.33s/it]Batches:  42%|████▏     | 51/122 [01:59<02:47,  2.36s/it]Batches:  43%|████▎     | 52/122 [02:01<02:42,  2.33s/it]Batches:  43%|████▎     | 53/122 [02:04<02:39,  2.31s/it]Batches:  44%|████▍     | 54/122 [02:06<02:34,  2.27s/it]Batches:  45%|████▌     | 55/122 [02:08<02:34,  2.30s/it]Batches:  46%|████▌     | 56/122 [02:11<02:31,  2.30s/it]Batches:  47%|████▋     | 57/122 [02:13<02:28,  2.28s/it]Batches:  48%|████▊     | 58/122 [02:15<02:29,  2.34s/it]Batches:  48%|████▊     | 59/122 [02:18<02:28,  2.36s/it]Batches:  49%|████▉     | 60/122 [02:20<02:27,  2.38s/it]Batches:  50%|█████     | 61/122 [02:22<02:24,  2.37s/it]Batches:  51%|█████     | 62/122 [02:25<02:25,  2.43s/it]Batches:  52%|█████▏    | 63/122 [02:27<02:21,  2.40s/it]Batches:  52%|█████▏    | 64/122 [02:30<02:17,  2.37s/it]Batches:  53%|█████▎    | 65/122 [02:32<02:14,  2.37s/it]Batches:  54%|█████▍    | 66/122 [02:34<02:10,  2.34s/it]Batches:  55%|█████▍    | 67/122 [02:37<02:09,  2.35s/it]Batches:  56%|█████▌    | 68/122 [02:39<02:03,  2.30s/it]Batches:  57%|█████▋    | 69/122 [02:41<02:03,  2.33s/it]Batches:  57%|█████▋    | 70/122 [02:44<02:01,  2.33s/it]Batches:  58%|█████▊    | 71/122 [02:46<02:00,  2.35s/it]Batches:  59%|█████▉    | 72/122 [02:48<01:58,  2.38s/it]Batches:  60%|█████▉    | 73/122 [02:51<01:54,  2.33s/it]Batches:  61%|██████    | 74/122 [02:53<01:52,  2.34s/it]Batches:  61%|██████▏   | 75/122 [02:55<01:51,  2.37s/it]Batches:  62%|██████▏   | 76/122 [02:58<01:48,  2.37s/it]Batches:  63%|██████▎   | 77/122 [03:00<01:44,  2.32s/it]Batches:  64%|██████▍   | 78/122 [03:02<01:42,  2.33s/it]Batches:  65%|██████▍   | 79/122 [03:05<01:41,  2.35s/it]Batches:  66%|██████▌   | 80/122 [03:07<01:39,  2.36s/it]Batches:  66%|██████▋   | 81/122 [03:10<01:39,  2.43s/it]Batches:  67%|██████▋   | 82/122 [03:12<01:37,  2.43s/it]Batches:  68%|██████▊   | 83/122 [03:15<01:33,  2.40s/it]Batches:  69%|██████▉   | 84/122 [03:17<01:31,  2.42s/it]Batches:  70%|██████▉   | 85/122 [03:20<01:31,  2.47s/it]Batches:  70%|███████   | 86/122 [03:22<01:26,  2.42s/it]Batches:  71%|███████▏  | 87/122 [03:24<01:21,  2.34s/it]Batches:  72%|███████▏  | 88/122 [03:26<01:20,  2.37s/it]Batches:  73%|███████▎  | 89/122 [03:29<01:18,  2.37s/it]Batches:  74%|███████▍  | 90/122 [03:31<01:16,  2.38s/it]Batches:  75%|███████▍  | 91/122 [03:34<01:13,  2.36s/it]Batches:  75%|███████▌  | 92/122 [03:36<01:11,  2.39s/it]Batches:  76%|███████▌  | 93/122 [03:38<01:08,  2.35s/it]Batches:  77%|███████▋  | 94/122 [03:41<01:09,  2.47s/it]Batches:  78%|███████▊  | 95/122 [03:43<01:04,  2.40s/it]Batches:  79%|███████▊  | 96/122 [03:46<01:01,  2.37s/it]Batches:  80%|███████▉  | 97/122 [03:48<00:58,  2.34s/it]Batches:  80%|████████  | 98/122 [03:50<00:56,  2.34s/it]Batches:  81%|████████  | 99/122 [03:53<00:53,  2.35s/it]Batches:  82%|████████▏ | 100/122 [03:55<00:50,  2.30s/it]Batches:  83%|████████▎ | 101/122 [03:57<00:49,  2.35s/it]Batches:  84%|████████▎ | 102/122 [03:59<00:46,  2.32s/it]Batches:  84%|████████▍ | 103/122 [04:02<00:43,  2.31s/it]Batches:  85%|████████▌ | 104/122 [04:04<00:41,  2.30s/it]Batches:  86%|████████▌ | 105/122 [04:06<00:39,  2.30s/it]Batches:  87%|████████▋ | 106/122 [04:09<00:37,  2.31s/it]Batches:  88%|████████▊ | 107/122 [04:11<00:34,  2.31s/it]Batches:  89%|████████▊ | 108/122 [04:13<00:32,  2.33s/it]Batches:  89%|████████▉ | 109/122 [04:16<00:30,  2.34s/it]Batches:  90%|█████████ | 110/122 [04:18<00:27,  2.28s/it]Batches:  91%|█████████ | 111/122 [04:20<00:25,  2.31s/it]Batches:  92%|█████████▏| 112/122 [04:22<00:22,  2.29s/it]Batches:  93%|█████████▎| 113/122 [04:25<00:20,  2.31s/it]Batches:  93%|█████████▎| 114/122 [04:27<00:18,  2.36s/it]Batches:  94%|█████████▍| 115/122 [04:29<00:16,  2.30s/it]Batches:  95%|█████████▌| 116/122 [04:32<00:13,  2.31s/it]Batches:  96%|█████████▌| 117/122 [04:34<00:11,  2.24s/it]Batches:  97%|█████████▋| 118/122 [04:36<00:09,  2.30s/it]Batches:  98%|█████████▊| 119/122 [04:39<00:06,  2.28s/it]Batches:  98%|█████████▊| 120/122 [04:41<00:04,  2.32s/it]Batches:  99%|█████████▉| 121/122 [04:43<00:02,  2.35s/it]Batches: 100%|██████████| 122/122 [04:46<00:00,  2.43s/it]Batches: 100%|██████████| 122/122 [04:46<00:00,  2.35s/it]
+
+======================================================================
+✓ Successfully processed: 976/976
+✗ Skipped (missing/error): 0/976
+
+Extracted shapes:
+  Positive: (976, 3584)
+  Negative: (976, 3584)
+  Labels: (976,)
+
+Cached to: hidden_states_cache_final/cache_spatial_recognition_976_qwen2_ccs_aligned.npz
+
+Logistic regression sanity-check accuracy: 78.3%
+
+======================================================================
+TRAINING CCS PROBE
+======================================================================
+
+Dataset split:
+  Train: 585 samples (289 pos, 296 neg)
+  Test:  391 samples (199 pos, 192 neg)
+  Hidden dim: 3584
+
+======================================================================
+TRAINING WITH MULTIPLE RANDOM RESTARTS
+======================================================================
+  Trial  1/10: Loss = 0.010261
+  Trial  2/10: Loss = 0.005145
+  Trial  3/10: Loss = 0.013680
+  Trial  4/10: Loss = 0.005135
+  Trial  5/10: Loss = 0.015390
+  Trial  6/10: Loss = 0.010237
+  Trial  7/10: Loss = 0.008552
+  Trial  8/10: Loss = 0.005134
+  Trial  9/10: Loss = 0.017101
+  Trial 10/10: Loss = 0.003426
+
+======================================================================
+EVALUATION WITH BEST PROBE
+======================================================================
+Best loss: 0.003426
+
+Test Results:
+  Overall Accuracy: 74.7% (292/391)
+  Positive samples: 73.9% (199 samples)
+  Negative samples: 75.5% (192 samples)
+
+✓ COMPLETE: spatial_recognition → 74.7%
+
+======================================================================
+
+Final Results:
+  object_detection         : 89.9%
+  attribute_recognition    : 82.0%
+  spatial_recognition      : 74.7%
+
+  Average                  : 82.2%
+
+======================================================================
+
+=== linear_ccs.py finished at Sat Sep 19 10:46:55 CEST 2026 with exit code: 0 ===

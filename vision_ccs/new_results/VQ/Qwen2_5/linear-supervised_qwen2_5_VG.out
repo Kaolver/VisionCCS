@@ -1,0 +1,163 @@
+host    : gcn5.local.snellius.surf.nl
+workdir : /gpfs/home6/mdemirev/VisionCCS/vision_ccs
+python  : /gpfs/home6/mdemirev/VisionCCS/vision_ccs/venv/bin/python
+cuda    : True NVIDIA A100-SXM4-40GB MIG 3g.20gb
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+--------------------------------------------------------------------
+=== running linear_supervised.py ===
+Qwen/Qwen2.5-VL-7B-Instruct + Contrast Pairs + Supervised Methods (revised)
+Dataset: vg (categories: ['object', 'attribute', 'spatial'])
+
+######################################################################
+# CATEGORY: OBJECT
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: OBJECT
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_object_12000_qwen2_5_ccs_aligned.npz
+  Loaded: pos=(12000, 3584), neg=(12000, 3584)
+
+======================================================================
+SUPERVISED LOGISTIC REGRESSION
+======================================================================
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 3584
+
+Logistic regression accuracy: 81.8%
+
+======================================================================
+SUPERVISED LINEAR PROBE
+======================================================================
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 3584
+
+Results:
+  Train Accuracy: 70.6%
+  Test Accuracy:  70.0%
+  Positive samples: 58.4% (2366 samples)
+  Negative samples: 81.3% (2434 samples)
+
+======================================================================
+COMPARISON SUMMARY
+======================================================================
+  Logistic Regression:     81.8%
+  Supervised Linear Probe: 70.0%
+
+✓ COMPLETE: object
+
+######################################################################
+# CATEGORY: ATTRIBUTE
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: ATTRIBUTE
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_attribute_12000_qwen2_5_ccs_aligned.npz
+  Loaded: pos=(12000, 3584), neg=(12000, 3584)
+
+======================================================================
+SUPERVISED LOGISTIC REGRESSION
+======================================================================
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 3584
+
+Logistic regression accuracy: 84.0%
+
+======================================================================
+SUPERVISED LINEAR PROBE
+======================================================================
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 3584
+
+Results:
+  Train Accuracy: 85.5%
+  Test Accuracy:  84.4%
+  Positive samples: 87.0% (2366 samples)
+  Negative samples: 81.8% (2434 samples)
+
+======================================================================
+COMPARISON SUMMARY
+======================================================================
+  Logistic Regression:     84.0%
+  Supervised Linear Probe: 84.4%
+
+✓ COMPLETE: attribute
+
+######################################################################
+# CATEGORY: SPATIAL
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: SPATIAL
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_spatial_12000_qwen2_5_ccs_aligned.npz
+  Loaded: pos=(12000, 3584), neg=(12000, 3584)
+
+======================================================================
+SUPERVISED LOGISTIC REGRESSION
+======================================================================
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 3584
+
+Logistic regression accuracy: 81.4%
+
+======================================================================
+SUPERVISED LINEAR PROBE
+======================================================================
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 3584
+
+Results:
+  Train Accuracy: 79.2%
+  Test Accuracy:  79.5%
+  Positive samples: 74.9% (2366 samples)
+  Negative samples: 84.1% (2434 samples)
+
+======================================================================
+COMPARISON SUMMARY
+======================================================================
+  Logistic Regression:     81.4%
+  Supervised Linear Probe: 79.5%
+
+✓ COMPLETE: spatial
+
+======================================================================
+FINAL RESULTS SUMMARY
+======================================================================
+
+Category                       LogReg       Linear Probe
+----------------------------------------------------------------------
+  object                            81.8%       70.0%
+  attribute                         84.0%       84.4%
+  spatial                           81.4%       79.5%
+----------------------------------------------------------------------
+  Average                           82.4%       78.0%
+
+======================================================================
+
+=== linear_supervised.py finished at Sat Oct  3 15:46:51 CEST 2026 with exit code: 0 ===
