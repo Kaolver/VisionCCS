@@ -1,0 +1,172 @@
+host    : gcn5.local.snellius.surf.nl
+workdir : /gpfs/home6/mdemirev/VisionCCS/vision_ccs
+python  : /gpfs/home6/mdemirev/VisionCCS/vision_ccs/venv/bin/python
+cuda    : True NVIDIA A100-SXM4-40GB MIG 3g.20gb
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+--------------------------------------------------------------------
+=== running nonlinear_ccs.py ===
+Model: Qwen/Qwen2.5-VL-7B-Instruct — CCS with NON-LINEAR (MLP) probe
+Dataset: vg (categories: ['object', 'attribute', 'spatial'])
+
+######################################################################
+# CATEGORY: OBJECT
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: OBJECT
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_object_12000_qwen2_5_ccs_aligned.npz
+  Loaded: pos=(12000, 3584), neg=(12000, 3584)
+
+Logistic regression sanity-check accuracy: 81.8%
+
+======================================================================
+TRAINING CCS PROBE (NON-LINEAR / MLP)
+======================================================================
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 3584
+  MLP hidden size: 100
+
+======================================================================
+TRAINING WITH MULTIPLE RANDOM RESTARTS
+======================================================================
+  Trial  1/10: Loss = 0.014446
+  Trial  2/10: Loss = 0.025001
+  Trial  3/10: Loss = 0.012778
+  Trial  4/10: Loss = 0.012194
+  Trial  5/10: Loss = 0.024306
+  Trial  6/10: Loss = 0.016391
+  Trial  7/10: Loss = 0.002505
+  Trial  8/10: Loss = 0.009722
+  Trial  9/10: Loss = 0.004170
+  Trial 10/10: Loss = 0.023059
+
+======================================================================
+EVALUATION WITH BEST PROBE
+======================================================================
+Best loss: 0.002505
+
+Test Results:
+  Overall Accuracy: 75.4% (3621/4800)
+  Positive samples: 79.4% (2366 samples)
+  Negative samples: 71.6% (2434 samples)
+
+✓ COMPLETE: object → 75.4%
+
+######################################################################
+# CATEGORY: ATTRIBUTE
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: ATTRIBUTE
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_attribute_12000_qwen2_5_ccs_aligned.npz
+  Loaded: pos=(12000, 3584), neg=(12000, 3584)
+
+Logistic regression sanity-check accuracy: 84.0%
+
+======================================================================
+TRAINING CCS PROBE (NON-LINEAR / MLP)
+======================================================================
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 3584
+  MLP hidden size: 100
+
+======================================================================
+TRAINING WITH MULTIPLE RANDOM RESTARTS
+======================================================================
+  Trial  1/10: Loss = 0.005973
+  Trial  2/10: Loss = 0.009445
+  Trial  3/10: Loss = 0.017221
+  Trial  4/10: Loss = 0.010556
+  Trial  5/10: Loss = 0.020695
+  Trial  6/10: Loss = 0.003196
+  Trial  7/10: Loss = 0.004584
+  Trial  8/10: Loss = 0.012366
+  Trial  9/10: Loss = 0.015417
+  Trial 10/10: Loss = 0.009449
+
+======================================================================
+EVALUATION WITH BEST PROBE
+======================================================================
+Best loss: 0.003196
+
+Test Results:
+  Overall Accuracy: 83.0% (3985/4800)
+  Positive samples: 75.7% (2366 samples)
+  Negative samples: 90.1% (2434 samples)
+
+✓ COMPLETE: attribute → 83.0%
+
+######################################################################
+# CATEGORY: SPATIAL
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: SPATIAL
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_spatial_12000_qwen2_5_ccs_aligned.npz
+  Loaded: pos=(12000, 3584), neg=(12000, 3584)
+
+Logistic regression sanity-check accuracy: 81.4%
+
+======================================================================
+TRAINING CCS PROBE (NON-LINEAR / MLP)
+======================================================================
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 3584
+  MLP hidden size: 100
+
+======================================================================
+TRAINING WITH MULTIPLE RANDOM RESTARTS
+======================================================================
+  Trial  1/10: Loss = 0.007240
+  Trial  2/10: Loss = 0.002530
+  Trial  3/10: Loss = 0.006670
+  Trial  4/10: Loss = 0.005978
+  Trial  5/10: Loss = 0.008473
+  Trial  6/10: Loss = 0.004589
+  Trial  7/10: Loss = 0.007090
+  Trial  8/10: Loss = 0.011390
+  Trial  9/10: Loss = 0.030584
+  Trial 10/10: Loss = 0.006400
+
+======================================================================
+EVALUATION WITH BEST PROBE
+======================================================================
+Best loss: 0.002530
+
+Test Results:
+  Overall Accuracy: 73.8% (3543/4800)
+  Positive samples: 66.7% (2366 samples)
+  Negative samples: 80.7% (2434 samples)
+
+✓ COMPLETE: spatial → 73.8%
+
+======================================================================
+
+Final Results (CCS, non-linear MLP probe):
+  object                   : 75.4%
+  attribute                : 83.0%
+  spatial                  : 73.8%
+
+  Average                  : 77.4%
+
+======================================================================
+
+=== nonlinear_ccs.py finished at Sat Oct  3 15:51:29 CEST 2026 with exit code: 0 ===

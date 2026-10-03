@@ -1,0 +1,108 @@
+host    : gcn5.local.snellius.surf.nl
+workdir : /gpfs/home6/mdemirev/VisionCCS/vision_ccs
+python  : /gpfs/home6/mdemirev/VisionCCS/vision_ccs/venv/bin/python
+cuda    : True NVIDIA A100-SXM4-40GB MIG 3g.20gb
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+--------------------------------------------------------------------
+=== running nonlinear_supervised.py ===
+llava-hf/llava-1.5-7b-hf + Contrast Pairs + Supervised NON-LINEAR (MLP) Probe
+
+######################################################################
+# CATEGORY: OBJECT_DETECTION
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: OBJECT_DETECTION
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_object_detection_1306_llava_ccs_aligned.npz
+  Loaded: pos=(1306, 4096), neg=(1306, 4096)
+
+======================================================================
+SUPERVISED NON-LINEAR (MLP) PROBE
+======================================================================
+
+Dataset split:
+  Train: 783 samples (402 pos, 381 neg)
+  Test:  523 samples (251 pos, 272 neg)
+  Hidden dim: 4096
+
+Results:
+  Train Accuracy: 86.6%
+  Test Accuracy:  83.7%
+  Positive samples: 77.3% (251 samples)
+  Negative samples: 89.7% (272 samples)
+
+✓ COMPLETE: object_detection → 83.7%
+
+######################################################################
+# CATEGORY: ATTRIBUTE_RECOGNITION
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: ATTRIBUTE_RECOGNITION
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_attribute_recognition_3366_llava_ccs_aligned.npz
+  Loaded: pos=(3366, 4096), neg=(3366, 4096)
+
+======================================================================
+SUPERVISED NON-LINEAR (MLP) PROBE
+======================================================================
+
+Dataset split:
+  Train: 2019 samples (1030 pos, 989 neg)
+  Test:  1347 samples (653 pos, 694 neg)
+  Hidden dim: 4096
+
+Results:
+  Train Accuracy: 83.6%
+  Test Accuracy:  74.6%
+  Positive samples: 62.9% (653 samples)
+  Negative samples: 85.6% (694 samples)
+
+✓ COMPLETE: attribute_recognition → 74.6%
+
+######################################################################
+# CATEGORY: SPATIAL_RECOGNITION
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: SPATIAL_RECOGNITION
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_spatial_recognition_976_llava_ccs_aligned.npz
+  Loaded: pos=(976, 4096), neg=(976, 4096)
+
+======================================================================
+SUPERVISED NON-LINEAR (MLP) PROBE
+======================================================================
+
+Dataset split:
+  Train: 585 samples (289 pos, 296 neg)
+  Test:  391 samples (199 pos, 192 neg)
+  Hidden dim: 4096
+
+Results:
+  Train Accuracy: 81.0%
+  Test Accuracy:  67.0%
+  Positive samples: 43.7% (199 samples)
+  Negative samples: 91.1% (192 samples)
+
+✓ COMPLETE: spatial_recognition → 67.0%
+
+======================================================================
+
+Final Results (supervised, non-linear MLP probe):
+  object_detection         : 83.7%
+  attribute_recognition    : 74.6%
+  spatial_recognition      : 67.0%
+
+  Average                  : 75.1%
+
+======================================================================
+
+=== nonlinear_supervised.py finished at Sat Sep 26 00:56:40 CEST 2026 with exit code: 0 ===

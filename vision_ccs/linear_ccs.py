@@ -19,28 +19,55 @@ import torch.nn as nn
 import torch.optim as optim
 import copy
 from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
 
 
-dataset = json.load(open('vqav2_mapped.json', 'r'))
-distribution = {category: len(items) for category, items in dataset.items()}
+# ==============================================================================
+# Datasets. Both are yes/no questions over COCO images, which Snellius provides
+# at the shared paths in CONFIG['image_dirs'], so only the question files are
+# uploaded. Pick one with CONFIG['dataset'].
+#
+# - vqa2: ./vqav2_mapped.json, one dict keyed by category; every item of the
+#   category is used.
+# - vg:   ../vg/{train,val,test}.jsonl (Visual Genome questions on COCO images,
+#   one JSON object per line). The three files are pooled; the pipeline makes
+#   its own seeded 60/40 split, exactly as for vqa2. Categories are named
+#   object / attribute / spatial (not *_detection / *_recognition as in vqa2).
+#   'equalize_categories' trims every category to the size of the smallest
+#   one, so the three probes train on the same number of examples.
+# ==============================================================================
+DATASETS = {
+    'vqa2': {
+        'files': ['./vqav2_mapped.json'],
+        'categories': ['object_detection', 'attribute_recognition', 'spatial_recognition'],
+        'equalize_categories': False,
+    },
+    'vg': {
+        'files': ['./vg/train.jsonl', './vg/val.jsonl', './vg/test.jsonl'],
+        'categories': ['object', 'attribute', 'spatial'],
+        'equalize_categories': False,
+    },
+}
 
 CONFIG = {
-    'n_samples_object_detection': distribution.get('object_detection', 0),
-    'n_samples_attribute_recognition': distribution.get('attribute_recognition', 0),
-    'n_samples_spatial_recognition': distribution.get('spatial_recognition', 0),
-    'batch_size': 40,
+    # Choose dataset: 'vqa2' or 'vg'
+    'dataset': 'vg',
+
+    # Upper bound on examples per category (after yes/no balancing it is
+    # rounded down to an even number). None = use everything available.
+    'max_samples_per_category': None,
+
+    'batch_size': 8,
     
     # Cache control
-    'use_cache': False,
+    'use_cache': True,
     
     # Paths
-    'vqa_json': './vqav2_mapped.json',
     'image_dirs': [
         '/scratch-nvme/ml-datasets/coco/train/data',
-        '/scratch-nvme/ml-datasets/coco/val/data',
+        '/scratch-nvme/ml-datasets/coco/validation/data',
     ],
     'cache_dir': './hidden_states_cache_final',
-    'categories': ['object_detection', 'attribute_recognition', 'spatial_recognition'],
     
     # Model
     'model_llava': 'llava-hf/llava-1.5-7b-hf',
@@ -51,26 +78,121 @@ CONFIG = {
     'chosen_model': 'qwen2',
     
     'hf_token': None,
-    
-    'train_split': 0.7,
+
+
+    # ==========================================================================
+    # CHANGED (CCS alignment): train/test split is now a random 60/40 split, as
+    # in the CCS paper (Sec 3.1: "randomly split each dataset into an
+    # unsupervised training set (60% of the data) and test set (40%)").
+    # Previously this was 0.7 (a 70/30 split); the original notebook uses an
+    # unshuffled 50/50 cut.
+    # ==========================================================================
+    'train_split': 0.6,
+
+
     'ccs_epochs': 1000,
     'ccs_ntries': 10,
-    'ccs_lr': 1e-3,
+
+
+    # ==========================================================================
+    # CHANGED (CCS alignment): learning rate raised from 1e-3 (the original
+    # notebook's default) to 0.01, which is what the paper (Sec 3.1) reports
+    # for optimizing CCS with AdamW.
+    # ==========================================================================
+    'ccs_lr': 1e-2,
+
+
     'ccs_weight_decay': 0.01,
+
+
+    # ==========================================================================
+    # CHANGED (CCS alignment): new options.
+    # - 'ccs_var_normalize': after mean-centering, also divide features by
+    #   their std. Matches the paper (Sec 2.2: "In practice we also normalize
+    #   the scale of the features") and the report's claim that activations
+    #   are normalised "to ensure comparable scale". The original notebook
+    #   exposes this as var_normalize (default False there).
+    # - 'random_seed': seed for the new random subsampling and the random split.
+    # - 'run_lr_sanity_check': run the supervised logistic-regression check
+    #   from the original notebook before CCS ("if logistic regression
+    #   accuracy is bad, there's no hope of CCS doing well"). Diagnostic only;
+    #   does not affect CCS training or its reported accuracy.
+    # ==========================================================================
+    'ccs_var_normalize': True,
+    'random_seed': 42,
+    'run_lr_sanity_check': True,
 }
+
+if CONFIG['dataset'] not in DATASETS:
+    raise ValueError(f"CONFIG['dataset'] = {CONFIG['dataset']!r}; expected one of {list(DATASETS)}")
+# Derived from the dataset choice; the other three scripts inherit it.
+CONFIG['categories'] = DATASETS[CONFIG['dataset']]['categories']
+
+
+def load_dataset(config):
+    """Read the chosen dataset as {category: [{question, answer, image_id}]}."""
+    spec = DATASETS[config['dataset']]
+    data = {category: [] for category in spec['categories']}
+
+    if config['dataset'] == 'vqa2':
+        with open(spec['files'][0], 'r') as f:
+            all_data = json.load(f)
+        for category in spec['categories']:
+            data[category] = all_data[category]
+
+    elif config['dataset'] == 'vg':
+        for path in spec['files']:
+            with open(path, 'r') as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    item = json.loads(line)
+                    if item['category'] not in data:
+                        continue
+                    # 'image_id' is the Visual Genome id; the image on disk is
+                    # named after the COCO id.
+                    data[item['category']].append({
+                        'question': item['question'],
+                        'answer': item['answer'],
+                        'image_id': item['coco_id'],
+                    })
+
+    return data
 
 
 def load_vqa_data(config, category):
-    """Load data for a specific category from the categorized VQA JSON."""
-    data_path = Path(config['vqa_json'])
-    with open(data_path, 'r') as f:
-        all_data = json.load(f)
-        vqa_data = all_data[category]
-    
-    n_samples_key = f'n_samples_{category}'
-    n_samples = config.get(n_samples_key, len(vqa_data))
-    samples = vqa_data[:n_samples]
-    
+    """Load data for a specific category of the chosen dataset as contrast pairs."""
+    data = load_dataset(config)
+    vqa_data = data[category]
+
+    n_samples = len(vqa_data)
+    if DATASETS[config['dataset']]['equalize_categories']:
+        n_samples = min(len(data[c]) for c in config['categories'])
+    if config['max_samples_per_category'] is not None:
+        n_samples = min(n_samples, config['max_samples_per_category'])
+
+
+    # ==========================================================================
+    # CHANGED (CCS alignment): the paper (Sec 3.1) balances the labels 50/50 and
+    # randomly subsamples before splitting (the original notebook also samples
+    # examples at random). Previously a deterministic prefix of the file was
+    # taken, with whatever yes/no class balance the dataset happened to contain
+    # — on an imbalanced test set the accuracy-orientation flip max(acc, 1-acc)
+    # makes the majority-class rate a trivial floor, inflating results.
+    # Now: split items by answer, randomly subsample an equal number of "yes"
+    # and "no" items (seeded for reproducibility), and shuffle them together.
+    # ==========================================================================
+    rng = np.random.default_rng(config['random_seed'])
+    yes_items = [item for item in vqa_data if item['answer'] == 'yes']
+    no_items = [item for item in vqa_data if item['answer'] != 'yes']
+    n_per_class = min(len(yes_items), len(no_items), n_samples // 2)
+    yes_sel = [yes_items[i] for i in rng.permutation(len(yes_items))[:n_per_class]]
+    no_sel = [no_items[i] for i in rng.permutation(len(no_items))[:n_per_class]]
+    samples = yes_sel + no_sel
+    samples = [samples[i] for i in rng.permutation(len(samples))]
+
+
+
     # Create contrast pairs
     pairs = []
     for item in samples:
@@ -111,7 +233,18 @@ def extract_in_batches(pairs, config, category):
     # Check cache
     n = len(pairs)
     model_tag = config['chosen_model']
-    cache_file = cache_dir / f"cache_{category}_{n}_{model_tag}.npz"
+
+
+    # ==========================================================================
+    # CHANGED (CCS alignment): cache filename tag bumped ("_ccs_aligned").
+    # Hidden states are now pooled at the token right after the answer
+    # (+ EOS / end-of-turn) instead of after the generation prompt, so caches
+    # produced by the previous extraction code are incompatible and must not
+    # be reused.
+    # ==========================================================================
+    # vqa2 caches keep their original names so existing ones stay valid.
+    dataset_tag = '' if config['dataset'] == 'vqa2' else f"{config['dataset']}_"
+    cache_file = cache_dir / f"cache_{dataset_tag}{category}_{n}_{model_tag}_ccs_aligned.npz"
     
     if config['use_cache'] and cache_file.exists():
         print("✓ Found cached hidden states!")
@@ -295,8 +428,20 @@ def extract_in_batches(pairs, config, category):
 def extract_one_llava(model, processor, image, text, device):
     """Extract hidden state from LLaVA for a single image-text pair."""
     
-    prompt = f"USER: <image>\n{text}\nASSISTANT:"
-    
+    # ==========================================================================
+    # CHANGED (CCS alignment): the original CCS appends tokenizer.eos_token
+    # directly after the statement for decoder models and pools the hidden
+    # state at that last token. Previously the prompt ended with
+    # "\nASSISTANT:", so the pooled last token sat after generation-prompt
+    # tokens rather than right after the "Yes"/"No" answer. The trailing
+    # "ASSISTANT:" is removed and EOS is appended, so the last token now
+    # directly follows the answer (+ EOS), as in the original.
+    # ==========================================================================
+    eos = processor.tokenizer.eos_token or ""
+    prompt = f"USER: <image>\n{text}{eos}"
+
+
+
     # Process inputs
     inputs = processor(
         images=image,
@@ -337,10 +482,20 @@ def extract_one_qwen2(model, processor, image, text, device):
     ]
     
     # Apply chat template
+    # ==========================================================================
+    # CHANGED (CCS alignment): add_generation_prompt is now False (was True).
+    # Original CCS pools the last-token hidden state right after the statement
+    # (+ EOS for decoder models); with the generation prompt, the pooled last
+    # token was the end of the assistant header instead of the answer. Now the
+    # templated text ends with the user turn ("... Yes<|im_end|>"), the chat-
+    # template equivalent of statement + EOS.
+    # ==========================================================================
     text_prompt = processor.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True
+        messages, tokenize=False, add_generation_prompt=False
     )
-    
+
+
+
     # Process vision info
     image_inputs, video_inputs = process_vision_info(messages)
     
@@ -384,7 +539,15 @@ def extract_one_qwen2_5(model, processor, image, text, device):
     ]
     
     # Prepare inputs using Qwen's format
-    text_prompt = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    # ==========================================================================
+    # CHANGED (CCS alignment): add_generation_prompt is now False (was True),
+    # same rationale as for the other models — the pooled last token now sits
+    # right after the answer (+ end-of-turn token), not after the assistant
+    # generation prompt.
+    # ==========================================================================
+    text_prompt = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+
+
     image_inputs, video_inputs = process_vision_info(messages)
     
     inputs = processor(
@@ -418,34 +581,67 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
     pos_hiddens = torch.FloatTensor(pos_hiddens)
     neg_hiddens = torch.FloatTensor(neg_hiddens)
     
-    # Stratified train/test split to maintain class balance    
     n = len(labels)
     indices = np.arange(n)
-    
-    # Stratified split maintains class proportions
+
+
+    # ==========================================================================
+    # CHANGED (CCS alignment): the split is now a plain random split with NO
+    # stratification (stratify=labels removed). Stratifying used the ground-
+    # truth labels to construct the split, injecting a supervised signal into
+    # an otherwise unsupervised pipeline; the original CCS is label-free until
+    # evaluation (the notebook uses an unshuffled 50/50 cut, the paper a random
+    # 60/40 split — the 60/40 ratio is set via 'train_split' in CONFIG).
+    # ==========================================================================
     train_idx, test_idx = train_test_split(
-        indices, 
+        indices,
         test_size=1 - config['train_split'],
-        stratify=labels,
-        random_state=42
+        random_state=config['random_seed']
     )
-    
+
+
+
     pos_train_raw = pos_hiddens[train_idx]
     neg_train_raw = neg_hiddens[train_idx]
     pos_test_raw = pos_hiddens[test_idx]
     neg_test_raw = neg_hiddens[test_idx]
     labels_test = labels[test_idx]
 
-    pos_mean_train = pos_train_raw.mean(dim=0)
-    neg_mean_train = neg_train_raw.mean(dim=0)
-    pos_train = pos_train_raw - pos_mean_train
-    neg_train = neg_train_raw - neg_mean_train
-    
-    pos_mean_test = pos_test_raw.mean(dim=0)
-    neg_mean_test = neg_test_raw.mean(dim=0)
-    pos_test = pos_test_raw - pos_mean_test
-    neg_test = neg_test_raw - neg_mean_test
-    
+    # ==========================================================================
+    # CHANGED (CCS alignment): normalization now optionally divides by the
+    # per-class std after mean-centering ('ccs_var_normalize', default True),
+    # exactly like CCS.normalize with var_normalize in the original notebook.
+    # The paper (Sec 2.2) states feature scale is normalized in practice; the
+    # report also claims activations are normalised "to ensure comparable
+    # scale". Previously only mean-centering was implemented.
+    # (unbiased=False matches numpy's std used by the original.)
+    # ==========================================================================
+    def normalize(x):
+        x = x - x.mean(dim=0)
+        if config['ccs_var_normalize']:
+            x = x / x.std(dim=0, unbiased=False)
+        return x
+
+    pos_train = normalize(pos_train_raw)
+    neg_train = normalize(neg_train_raw)
+    pos_test = normalize(pos_test_raw)
+    neg_test = normalize(neg_test_raw)
+
+
+    # ==========================================================================
+    # CHANGED (CCS alignment, minor): the probe is now trained on GPU when
+    # available, like the original (CCS(..., device="cuda")); previously the
+    # probe and hidden states always stayed on CPU (numerically equivalent,
+    # only slower).
+    # ==========================================================================
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    pos_train = pos_train.to(device)
+    neg_train = neg_train.to(device)
+    pos_test = pos_test.to(device)
+    neg_test = neg_test.to(device)
+
+
+
     n_train = len(train_idx)
     n_test = len(test_idx)
     n_train_pos = (labels[train_idx] == 1).sum()
@@ -479,63 +675,78 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
     
     for trial in range(config['ccs_ntries']):
         # Initialize fresh probe for this trial
-        probe = CCSProbe(pos_hiddens.shape[1])
-        
+        probe = CCSProbe(pos_hiddens.shape[1]).to(device)
+
         # Add weight decay (L2 regularization)
         optimizer = optim.AdamW(
-            probe.parameters(), 
+            probe.parameters(),
             lr=config['ccs_lr'],
             weight_decay=config['ccs_weight_decay']
         )
-        
-        # Training loop for this trial
+
+
+        # ======================================================================
+        # CHANGED (CCS alignment, minor): the examples are now randomly permuted
+        # at the start of every training run, mirroring the original train().
+        # With full-batch training this does not change the gradients, but it
+        # keeps the procedure identical to the original's default setting.
+        # ======================================================================
+        permutation = torch.randperm(len(pos_train))
+        pos_train_run = pos_train[permutation]
+        neg_train_run = neg_train[permutation]
+
+
+        # Training loop for this trial (full batch, as in the original's
+        # default batch_size=-1 setting)
         probe.train()
         for epoch in range(config['ccs_epochs']):
             # Forward pass
-            p_pos = probe(pos_train)
-            p_neg = probe(neg_train)
-            
+            p_pos = probe(pos_train_run)
+            p_neg = probe(neg_train_run)
+
+            # NOTE: Original uses mean(0)
             consistency_loss = ((p_pos - (1 - p_neg)) ** 2).mean()
             # Confidence: predictions should be confident (far from 0.5)
             confidence_loss = (torch.min(p_pos, p_neg) ** 2).mean()
-            
+
             loss = consistency_loss + confidence_loss
-            
+
             # Backward pass
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-        
-        # Evaluate final loss for this trial
-        probe.eval()
-        with torch.no_grad():
-            p_pos_final = probe(pos_train)
-            p_neg_final = probe(neg_train)
-            final_consistency = ((p_pos_final - (1 - p_neg_final)) ** 2).mean()
-            final_confidence = (torch.min(p_pos_final, p_neg_final) ** 2).mean()
-            final_loss = final_consistency + final_confidence
-        
-        print(f"  Trial {trial+1:2d}/{config['ccs_ntries']}: Loss = {final_loss.item():.6f}")
-        
+
+
+        # ======================================================================
+        # CHANGED (CCS alignment, minor): the loss used to select the best
+        # restart is now the last training-step loss, exactly as returned by
+        # the original train() and compared in repeated_train(); previously the
+        # loss was recomputed over the full train set after training.
+        # ======================================================================
+        final_loss = loss.detach().cpu().item()
+
+
+        print(f"  Trial {trial+1:2d}/{config['ccs_ntries']}: Loss = {final_loss:.6f}")
+
         # Keep best probe based on lowest loss (unsupervised criterion)
         if final_loss < best_loss:
             best_loss = final_loss
             best_probe = copy.deepcopy(probe)
-    
+
     print(f"\n{'='*70}")
     print(f"EVALUATION WITH BEST PROBE")
     print(f"{'='*70}")
-    print(f"Best loss: {best_loss.item():.6f}")
-    
+    print(f"Best loss: {best_loss:.6f}")
+
     # Evaluate with best probe
     best_probe.eval()
     with torch.no_grad():
         p_pos = best_probe(pos_test).squeeze()
         p_neg = best_probe(neg_test).squeeze()
-        
+
         # Average positive and negative predictions
         probs = 0.5 * (p_pos + (1 - p_neg))
-        preds = (probs > 0.5).numpy()
+        preds = (probs > 0.5).cpu().numpy()
     
     # Calculate metrics
     raw_accuracy = (preds == labels_test).mean()
@@ -577,11 +788,44 @@ def train_ccs_probe(pos_hiddens, neg_hiddens, labels, config):
     return accuracy, best_probe
 
 
+# ==============================================================================
+# CHANGED (CCS alignment): new function. The original notebook runs a supervised
+# logistic-regression check on the same hidden states BEFORE trying CCS
+# ("if logistic regression accuracy is bad, there's no hope of CCS doing well"),
+# using the difference between negative and positive hidden states as features.
+# Previously this baseline lived only in supervised_vision.py and was never run
+# as part of this pipeline. It uses the same seeded split as train_ccs_probe,
+# and is diagnostic only — it does not affect CCS training or its accuracy.
+# ==============================================================================
+def lr_sanity_check(pos_hiddens, neg_hiddens, labels, config):
+    """Supervised logistic-regression sanity check from the original CCS notebook."""
+    n = len(labels)
+    indices = np.arange(n)
+    train_idx, test_idx = train_test_split(
+        indices,
+        test_size=1 - config['train_split'],
+        random_state=config['random_seed']
+    )
+
+    # as in the original: "for simplicity we can just take the difference
+    # between positive and negative hidden states"
+    x = neg_hiddens - pos_hiddens
+    x_train, x_test = x[train_idx], x[test_idx]
+    y_train, y_test = labels[train_idx], labels[test_idx]
+
+    lr = LogisticRegression(class_weight="balanced", max_iter=5000)
+    lr.fit(x_train, y_train)
+    acc = lr.score(x_test, y_test)
+    print(f"\nLogistic regression sanity-check accuracy: {acc:.1%}")
+    return acc
+
+
 def main():
     """Main VisionCCS pipeline."""
     model_key = f"model_{CONFIG['chosen_model']}"
     chosen_model_name = CONFIG[model_key]
     print(f"Model: {chosen_model_name}")
+    print(f"Dataset: {CONFIG['dataset']} (categories: {CONFIG['categories']})")
     
     all_results = {}
     
@@ -602,6 +846,14 @@ def main():
             all_results[category] = 0.0
             continue
         
+        # ======================================================================
+        # CHANGED (CCS alignment): run the original notebook's supervised
+        # logistic-regression sanity check before CCS (see lr_sanity_check).
+        # ======================================================================
+        if CONFIG['run_lr_sanity_check']:
+            lr_sanity_check(pos_h, neg_h, labels, CONFIG)
+
+
         # 3. Train CCS probe
         acc, probe = train_ccs_probe(pos_h, neg_h, labels, CONFIG)
         
