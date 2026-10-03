@@ -14,7 +14,9 @@ mkdir -p zeroshot_jobs/logs
 for N in "$@"; do
   F=$(ls zeroshot_jobs/"$N"_*.sh 2>/dev/null | head -1)
   if [ -z "$F" ]; then echo "no job $N in zeroshot_jobs/" >&2; exit 1; fi
-  ID=$(sbatch --parsable "$F")
+  # --export=ALL explicitly: on Snellius the env (LIMIT, PYTHONUNBUFFERED)
+  # did not reach the jobs without it -- LIMIT=2000 runs came back with n=12000
+  ID=$(sbatch --parsable --export=ALL "$F")
   echo "$(date '+%F %T')  job ${ID%%;*}  $(basename "$F" .sh)${LIMIT:+  LIMIT=$LIMIT}" \
     | tee -a zeroshot_jobs/logs/submitted.txt
 done
