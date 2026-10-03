@@ -24,6 +24,7 @@ for DIR in "${SLURM_SUBMIT_DIR}" "$HOME/VisionCCS/vision_ccs"; do
   fi
 done
 set -e
+export PYTHONUNBUFFERED=1   # progress lines reach the Slurm log as they happen
 
 python zero_shot.py --model llava \
     --vqa-json ./vqav2_mapped.json --categories object_detection attribute_recognition spatial_recognition \

@@ -24,6 +24,7 @@ for DIR in "${SLURM_SUBMIT_DIR}" "$HOME/VisionCCS/vision_ccs"; do
   fi
 done
 set -e
+export PYTHONUNBUFFERED=1   # progress lines reach the Slurm log as they happen
 
 python vg_to_vqa.py --vg-dir ../vg --out ./vg_mapped.json
 python zero_shot.py --model llava \

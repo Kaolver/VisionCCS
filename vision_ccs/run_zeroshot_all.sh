@@ -33,6 +33,7 @@ for DIR in "${SLURM_SUBMIT_DIR}" "." "$(dirname "$0")" "$HOME/VisionCCS/vision_c
 done
 
 set -e
+export PYTHONUNBUFFERED=1   # progress lines reach the Slurm log as they happen
 MODELS="${MODELS:-llava qwen2 qwen2_5}"
 DATASETS="${DATASETS:-vqa vg}"
 VARIANTS="${VARIANTS:-noinstr instr}"
