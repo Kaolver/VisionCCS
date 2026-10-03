@@ -20,12 +20,9 @@
 #   LIMIT     items per category    (default: all; 5 for a smoke test)
 #   OUT       output directory      (default: ./zeroshot_report)
 #
-# Smoke test (also downloads all three models once, so parallel jobs don't race):
-#   sbatch --time=01:00:00 --export=ALL,LIMIT=5,OUT=./zeroshot_smoke run_zeroshot_all.sh
-# One parallel job:
-#   sbatch --job-name=zs-qwen2-vg-noinstr \
-#       --export=ALL,MODELS=qwen2,DATASETS=vg,VARIANTS=noinstr run_zeroshot_all.sh
-# Then: python collect_zeroshot.py --out-dir ./zeroshot_report
+# For the report, don't submit this directly: zeroshot_jobs/ has one script per
+# job (00 = smoke test, which calls this with LIMIT=5; 01-12 = the parallel
+# runs) and submit_all.sh. See zeroshot_jobs/README.md.
 #
 # Outputs: $OUT/zeroshot_{model}_{dataset}[_noinstr]_{category}.npz + _summary.json
 for DIR in "${SLURM_SUBMIT_DIR}" "." "$(dirname "$0")" "$HOME/VisionCCS/vision_ccs"; do

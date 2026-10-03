@@ -14,7 +14,13 @@
 # The last line of the log says SMOKE TEST OK or lists what failed.
 #
 # Submit from vision_ccs/:  bash zeroshot_jobs/submit_all.sh 00
-cd "${SLURM_SUBMIT_DIR:-$HOME/VisionCCS/vision_ccs}" || exit 1
+# modules + venv, so the check below has a python; it also cd's to vision_ccs/
+for DIR in "${SLURM_SUBMIT_DIR}" "$HOME/VisionCCS/vision_ccs"; do
+  if [ -n "$DIR" ] && [ -f "$DIR/_slurm_common.sh" ]; then
+    source "$DIR/_slurm_common.sh"
+    break
+  fi
+done
 LIMIT=5 OUT=./zeroshot_smoke bash ./run_zeroshot_all.sh
 
 python - <<'EOF'

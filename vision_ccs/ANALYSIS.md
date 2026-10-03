@@ -58,7 +58,8 @@ question is the size of the first gap.
 | `zero_shot.py` | calibrated Yes/No baseline; `--template`, `--no-instruction` | yes |
 | `pope_to_vqa.py` | converts POPE annotations into the `vqav2_mapped.json` schema | - |
 | `vg_to_vqa.py` | converts `vg/*.jsonl` (Visual Genome on COCO images) into the same schema | - |
-| `run_zeroshot_all.sh` | zero-shot over models x {vqa, vg} x prompt variants; one job per cell for parallel runs | yes |
+| `run_zeroshot_all.sh` | zero-shot over models x {vqa, vg} x prompt variants (used by the smoke test) | yes |
+| `zeroshot_jobs/` | the 12 parallel zero-shot jobs, one script each, plus smoke test and `submit_all.sh`; see its README | yes |
 | `collect_zeroshot.py` | zero-shot results -> one markdown/CSV table; tolerates jobs killed mid-run | no |
 | `reanalysis.py` | protocol-matched comparison of CCS / baselines / supervised on one cache | no (CPU fine) |
 | `layer_sweep.py` | the same analysis at every (layer, position) | no |
