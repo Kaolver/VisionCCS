@@ -28,37 +28,45 @@ Logistic regression sanity-check accuracy: 81.8%
 TRAINING CCS PROBE (NON-LINEAR / MLP)
 ======================================================================
 
+Feature check:
+  pos_train: zero-variance dims = 0, non-finite values after normalization = 0
+  neg_train: zero-variance dims = 0, non-finite values after normalization = 0
+  pos_test : zero-variance dims = 0, non-finite values after normalization = 0
+  neg_test : zero-variance dims = 0, non-finite values after normalization = 0
+
 Dataset split:
   Train: 7200 samples (3634 pos, 3566 neg)
   Test:  4800 samples (2366 pos, 2434 neg)
   Hidden dim: 3584
   MLP hidden size: 100
+  Learning rate: 0.001
 
 ======================================================================
 TRAINING WITH MULTIPLE RANDOM RESTARTS
 ======================================================================
-  Trial  1/10: Loss = 0.014446
-  Trial  2/10: Loss = 0.025001
-  Trial  3/10: Loss = 0.012778
-  Trial  4/10: Loss = 0.012194
-  Trial  5/10: Loss = 0.024306
-  Trial  6/10: Loss = 0.016391
-  Trial  7/10: Loss = 0.002505
-  Trial  8/10: Loss = 0.009722
-  Trial  9/10: Loss = 0.004170
-  Trial 10/10: Loss = 0.023059
+  Trial  1/10: Loss = 0.000041
+  Trial  2/10: Loss = 0.000023
+  Trial  3/10: Loss = 0.000035
+  Trial  4/10: Loss = 0.000021
+  Trial  5/10: Loss = 0.000022
+  Trial  6/10: Loss = 0.000030
+  Trial  7/10: Loss = 0.000071
+  Trial  8/10: Loss = 0.000041
+  Trial  9/10: Loss = 0.000044
+  Trial 10/10: Loss = 0.000026
 
 ======================================================================
 EVALUATION WITH BEST PROBE
 ======================================================================
-Best loss: 0.002505
+Best loss: 0.000021
+Test output check: non-finite = 0/4800, min = 0.0000, max = 1.0000, std = 0.484099
 
 Test Results:
-  Overall Accuracy: 75.4% (3621/4800)
-  Positive samples: 79.4% (2366 samples)
-  Negative samples: 71.6% (2434 samples)
+  Overall Accuracy: 71.8% (3447/4800)
+  Positive samples: 73.1% (2366 samples)
+  Negative samples: 70.5% (2434 samples)
 
-✓ COMPLETE: object → 75.4%
+✓ COMPLETE: object → 71.8%
 
 ######################################################################
 # CATEGORY: ATTRIBUTE
@@ -77,37 +85,45 @@ Logistic regression sanity-check accuracy: 84.0%
 TRAINING CCS PROBE (NON-LINEAR / MLP)
 ======================================================================
 
+Feature check:
+  pos_train: zero-variance dims = 0, non-finite values after normalization = 0
+  neg_train: zero-variance dims = 0, non-finite values after normalization = 0
+  pos_test : zero-variance dims = 0, non-finite values after normalization = 0
+  neg_test : zero-variance dims = 0, non-finite values after normalization = 0
+
 Dataset split:
   Train: 7200 samples (3634 pos, 3566 neg)
   Test:  4800 samples (2366 pos, 2434 neg)
   Hidden dim: 3584
   MLP hidden size: 100
+  Learning rate: 0.001
 
 ======================================================================
 TRAINING WITH MULTIPLE RANDOM RESTARTS
 ======================================================================
-  Trial  1/10: Loss = 0.005973
-  Trial  2/10: Loss = 0.009445
-  Trial  3/10: Loss = 0.017221
-  Trial  4/10: Loss = 0.010556
-  Trial  5/10: Loss = 0.020695
-  Trial  6/10: Loss = 0.003196
-  Trial  7/10: Loss = 0.004584
-  Trial  8/10: Loss = 0.012366
-  Trial  9/10: Loss = 0.015417
-  Trial 10/10: Loss = 0.009449
+  Trial  1/10: Loss = 0.000031
+  Trial  2/10: Loss = 0.000057
+  Trial  3/10: Loss = 0.000023
+  Trial  4/10: Loss = 0.000014
+  Trial  5/10: Loss = 0.000014
+  Trial  6/10: Loss = 0.000012
+  Trial  7/10: Loss = 0.000331
+  Trial  8/10: Loss = 0.000035
+  Trial  9/10: Loss = 0.000026
+  Trial 10/10: Loss = 0.000020
 
 ======================================================================
 EVALUATION WITH BEST PROBE
 ======================================================================
-Best loss: 0.003196
+Best loss: 0.000012
+Test output check: non-finite = 0/4800, min = 0.0000, max = 1.0000, std = 0.479356
 
 Test Results:
-  Overall Accuracy: 83.0% (3985/4800)
-  Positive samples: 75.7% (2366 samples)
-  Negative samples: 90.1% (2434 samples)
+  Overall Accuracy: 83.4% (4002/4800)
+  Positive samples: 77.2% (2366 samples)
+  Negative samples: 89.4% (2434 samples)
 
-✓ COMPLETE: attribute → 83.0%
+✓ COMPLETE: attribute → 83.4%
 
 ######################################################################
 # CATEGORY: SPATIAL
@@ -126,47 +142,55 @@ Logistic regression sanity-check accuracy: 81.4%
 TRAINING CCS PROBE (NON-LINEAR / MLP)
 ======================================================================
 
+Feature check:
+  pos_train: zero-variance dims = 0, non-finite values after normalization = 0
+  neg_train: zero-variance dims = 0, non-finite values after normalization = 0
+  pos_test : zero-variance dims = 0, non-finite values after normalization = 0
+  neg_test : zero-variance dims = 0, non-finite values after normalization = 0
+
 Dataset split:
   Train: 7200 samples (3634 pos, 3566 neg)
   Test:  4800 samples (2366 pos, 2434 neg)
   Hidden dim: 3584
   MLP hidden size: 100
+  Learning rate: 0.001
 
 ======================================================================
 TRAINING WITH MULTIPLE RANDOM RESTARTS
 ======================================================================
-  Trial  1/10: Loss = 0.007240
-  Trial  2/10: Loss = 0.002530
-  Trial  3/10: Loss = 0.006670
-  Trial  4/10: Loss = 0.005978
-  Trial  5/10: Loss = 0.008473
-  Trial  6/10: Loss = 0.004589
-  Trial  7/10: Loss = 0.007090
-  Trial  8/10: Loss = 0.011390
-  Trial  9/10: Loss = 0.030584
-  Trial 10/10: Loss = 0.006400
+  Trial  1/10: Loss = 0.000076
+  Trial  2/10: Loss = 0.000116
+  Trial  3/10: Loss = 0.000094
+  Trial  4/10: Loss = 0.000060
+  Trial  5/10: Loss = 0.000048
+  Trial  6/10: Loss = 0.000058
+  Trial  7/10: Loss = 0.000110
+  Trial  8/10: Loss = 0.000059
+  Trial  9/10: Loss = 0.000082
+  Trial 10/10: Loss = 0.000040
 
 ======================================================================
 EVALUATION WITH BEST PROBE
 ======================================================================
-Best loss: 0.002530
+Best loss: 0.000040
+Test output check: non-finite = 0/4800, min = 0.0000, max = 1.0000, std = 0.464427
 
 Test Results:
-  Overall Accuracy: 73.8% (3543/4800)
-  Positive samples: 66.7% (2366 samples)
-  Negative samples: 80.7% (2434 samples)
+  Overall Accuracy: 73.8% (3542/4800)
+  Positive samples: 64.8% (2366 samples)
+  Negative samples: 82.5% (2434 samples)
 
 ✓ COMPLETE: spatial → 73.8%
 
 ======================================================================
 
 Final Results (CCS, non-linear MLP probe):
-  object                   : 75.4%
-  attribute                : 83.0%
+  object                   : 71.8%
+  attribute                : 83.4%
   spatial                  : 73.8%
 
-  Average                  : 77.4%
+  Average                  : 76.3%
 
 ======================================================================
 
-=== nonlinear_ccs.py finished at Sat Oct  3 15:51:29 CEST 2026 with exit code: 0 ===
+=== nonlinear_ccs.py finished at Sun Oct  4 23:07:59 CEST 2026 with exit code: 0 ===
