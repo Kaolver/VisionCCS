@@ -1,0 +1,196 @@
+host    : gcn5.local.snellius.surf.nl
+workdir : /gpfs/home6/mdemirev/VisionCCS/vision_ccs
+python  : /gpfs/home6/mdemirev/VisionCCS/vision_ccs/venv/bin/python
+cuda    : True NVIDIA A100-SXM4-40GB MIG 3g.20gb
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+--------------------------------------------------------------------
+=== running nonlinear_ccs.py ===
+Model: Qwen/Qwen2.5-VL-7B-Instruct — CCS with NON-LINEAR (MLP) probe
+Dataset: vg (categories: ['object', 'attribute', 'spatial'])
+
+######################################################################
+# CATEGORY: OBJECT
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: OBJECT
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_object_12000_qwen2_5_ccs_aligned.npz
+  Loaded: pos=(12000, 3584), neg=(12000, 3584)
+
+Logistic regression sanity-check accuracy: 81.8%
+
+======================================================================
+TRAINING CCS PROBE (NON-LINEAR / MLP)
+======================================================================
+
+Feature check:
+  pos_train: zero-variance dims = 0, non-finite values after normalization = 0
+  neg_train: zero-variance dims = 0, non-finite values after normalization = 0
+  pos_test : zero-variance dims = 0, non-finite values after normalization = 0
+  neg_test : zero-variance dims = 0, non-finite values after normalization = 0
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 3584
+  MLP hidden size: 100
+  Learning rate: 0.001
+
+======================================================================
+TRAINING WITH MULTIPLE RANDOM RESTARTS
+======================================================================
+  Trial  1/10: Loss = 0.000041
+  Trial  2/10: Loss = 0.000023
+  Trial  3/10: Loss = 0.000035
+  Trial  4/10: Loss = 0.000021
+  Trial  5/10: Loss = 0.000022
+  Trial  6/10: Loss = 0.000030
+  Trial  7/10: Loss = 0.000071
+  Trial  8/10: Loss = 0.000041
+  Trial  9/10: Loss = 0.000044
+  Trial 10/10: Loss = 0.000026
+
+======================================================================
+EVALUATION WITH BEST PROBE
+======================================================================
+Best loss: 0.000021
+Test output check: non-finite = 0/4800, min = 0.0000, max = 1.0000, std = 0.484099
+
+Test Results:
+  Overall Accuracy: 71.8% (3447/4800)
+  Positive samples: 73.1% (2366 samples)
+  Negative samples: 70.5% (2434 samples)
+
+✓ COMPLETE: object → 71.8%
+
+######################################################################
+# CATEGORY: ATTRIBUTE
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: ATTRIBUTE
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_attribute_12000_qwen2_5_ccs_aligned.npz
+  Loaded: pos=(12000, 3584), neg=(12000, 3584)
+
+Logistic regression sanity-check accuracy: 84.0%
+
+======================================================================
+TRAINING CCS PROBE (NON-LINEAR / MLP)
+======================================================================
+
+Feature check:
+  pos_train: zero-variance dims = 0, non-finite values after normalization = 0
+  neg_train: zero-variance dims = 0, non-finite values after normalization = 0
+  pos_test : zero-variance dims = 0, non-finite values after normalization = 0
+  neg_test : zero-variance dims = 0, non-finite values after normalization = 0
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 3584
+  MLP hidden size: 100
+  Learning rate: 0.001
+
+======================================================================
+TRAINING WITH MULTIPLE RANDOM RESTARTS
+======================================================================
+  Trial  1/10: Loss = 0.000031
+  Trial  2/10: Loss = 0.000057
+  Trial  3/10: Loss = 0.000023
+  Trial  4/10: Loss = 0.000014
+  Trial  5/10: Loss = 0.000014
+  Trial  6/10: Loss = 0.000012
+  Trial  7/10: Loss = 0.000331
+  Trial  8/10: Loss = 0.000035
+  Trial  9/10: Loss = 0.000026
+  Trial 10/10: Loss = 0.000020
+
+======================================================================
+EVALUATION WITH BEST PROBE
+======================================================================
+Best loss: 0.000012
+Test output check: non-finite = 0/4800, min = 0.0000, max = 1.0000, std = 0.479356
+
+Test Results:
+  Overall Accuracy: 83.4% (4002/4800)
+  Positive samples: 77.2% (2366 samples)
+  Negative samples: 89.4% (2434 samples)
+
+✓ COMPLETE: attribute → 83.4%
+
+######################################################################
+# CATEGORY: SPATIAL
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: SPATIAL
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_spatial_12000_qwen2_5_ccs_aligned.npz
+  Loaded: pos=(12000, 3584), neg=(12000, 3584)
+
+Logistic regression sanity-check accuracy: 81.4%
+
+======================================================================
+TRAINING CCS PROBE (NON-LINEAR / MLP)
+======================================================================
+
+Feature check:
+  pos_train: zero-variance dims = 0, non-finite values after normalization = 0
+  neg_train: zero-variance dims = 0, non-finite values after normalization = 0
+  pos_test : zero-variance dims = 0, non-finite values after normalization = 0
+  neg_test : zero-variance dims = 0, non-finite values after normalization = 0
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 3584
+  MLP hidden size: 100
+  Learning rate: 0.001
+
+======================================================================
+TRAINING WITH MULTIPLE RANDOM RESTARTS
+======================================================================
+  Trial  1/10: Loss = 0.000076
+  Trial  2/10: Loss = 0.000116
+  Trial  3/10: Loss = 0.000094
+  Trial  4/10: Loss = 0.000060
+  Trial  5/10: Loss = 0.000048
+  Trial  6/10: Loss = 0.000058
+  Trial  7/10: Loss = 0.000110
+  Trial  8/10: Loss = 0.000059
+  Trial  9/10: Loss = 0.000082
+  Trial 10/10: Loss = 0.000040
+
+======================================================================
+EVALUATION WITH BEST PROBE
+======================================================================
+Best loss: 0.000040
+Test output check: non-finite = 0/4800, min = 0.0000, max = 1.0000, std = 0.464427
+
+Test Results:
+  Overall Accuracy: 73.8% (3542/4800)
+  Positive samples: 64.8% (2366 samples)
+  Negative samples: 82.5% (2434 samples)
+
+✓ COMPLETE: spatial → 73.8%
+
+======================================================================
+
+Final Results (CCS, non-linear MLP probe):
+  object                   : 71.8%
+  attribute                : 83.4%
+  spatial                  : 73.8%
+
+  Average                  : 76.3%
+
+======================================================================
+
+=== nonlinear_ccs.py finished at Sun Oct  4 23:07:59 CEST 2026 with exit code: 0 ===

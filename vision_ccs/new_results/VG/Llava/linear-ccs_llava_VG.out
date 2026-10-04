@@ -1,0 +1,169 @@
+host    : gcn5.local.snellius.surf.nl
+workdir : /gpfs/home6/mdemirev/VisionCCS/vision_ccs
+python  : /gpfs/home6/mdemirev/VisionCCS/vision_ccs/venv/bin/python
+cuda    : True NVIDIA A100-SXM4-40GB MIG 3g.20gb
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+--------------------------------------------------------------------
+=== running linear_ccs.py ===
+Model: llava-hf/llava-1.5-7b-hf
+Dataset: vg (categories: ['object', 'attribute', 'spatial'])
+
+######################################################################
+# CATEGORY: OBJECT
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: OBJECT
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_object_12000_llava_ccs_aligned.npz
+  Loaded: pos=(12000, 4096), neg=(12000, 4096)
+
+Logistic regression sanity-check accuracy: 84.2%
+
+======================================================================
+TRAINING CCS PROBE
+======================================================================
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 4096
+
+======================================================================
+TRAINING WITH MULTIPLE RANDOM RESTARTS
+======================================================================
+  Trial  1/10: Loss = 0.007900
+  Trial  2/10: Loss = 0.005027
+  Trial  3/10: Loss = 0.004921
+  Trial  4/10: Loss = 0.006358
+  Trial  5/10: Loss = 0.013093
+  Trial  6/10: Loss = 0.011122
+  Trial  7/10: Loss = 0.005477
+  Trial  8/10: Loss = 0.009026
+  Trial  9/10: Loss = 0.008374
+  Trial 10/10: Loss = 0.006770
+
+======================================================================
+EVALUATION WITH BEST PROBE
+======================================================================
+Best loss: 0.004921
+
+Test Results:
+  Overall Accuracy: 51.8% (2485/4800)
+  Positive samples: 62.7% (2366 samples)
+  Negative samples: 41.2% (2434 samples)
+
+✓ COMPLETE: object → 51.8%
+
+######################################################################
+# CATEGORY: ATTRIBUTE
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: ATTRIBUTE
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_attribute_12000_llava_ccs_aligned.npz
+  Loaded: pos=(12000, 4096), neg=(12000, 4096)
+
+Logistic regression sanity-check accuracy: 79.9%
+
+======================================================================
+TRAINING CCS PROBE
+======================================================================
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 4096
+
+======================================================================
+TRAINING WITH MULTIPLE RANDOM RESTARTS
+======================================================================
+  Trial  1/10: Loss = 0.006251
+  Trial  2/10: Loss = 0.007822
+  Trial  3/10: Loss = 0.005405
+  Trial  4/10: Loss = 0.009237
+  Trial  5/10: Loss = 0.006830
+  Trial  6/10: Loss = 0.011170
+  Trial  7/10: Loss = 0.010892
+  Trial  8/10: Loss = 0.011611
+  Trial  9/10: Loss = 0.007829
+  Trial 10/10: Loss = 0.007093
+
+======================================================================
+EVALUATION WITH BEST PROBE
+======================================================================
+Best loss: 0.005405
+
+Test Results:
+  Overall Accuracy: 71.8% (3445/4800)
+  Positive samples: 78.1% (2366 samples)
+  Negative samples: 65.6% (2434 samples)
+
+✓ COMPLETE: attribute → 71.8%
+
+######################################################################
+# CATEGORY: SPATIAL
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: SPATIAL
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_spatial_12000_llava_ccs_aligned.npz
+  Loaded: pos=(12000, 4096), neg=(12000, 4096)
+
+Logistic regression sanity-check accuracy: 81.9%
+
+======================================================================
+TRAINING CCS PROBE
+======================================================================
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 4096
+
+======================================================================
+TRAINING WITH MULTIPLE RANDOM RESTARTS
+======================================================================
+  Trial  1/10: Loss = 0.008626
+  Trial  2/10: Loss = 0.013327
+  Trial  3/10: Loss = 0.015585
+  Trial  4/10: Loss = 0.012819
+  Trial  5/10: Loss = 0.016398
+  Trial  6/10: Loss = 0.014719
+  Trial  7/10: Loss = 0.018812
+  Trial  8/10: Loss = 0.019503
+  Trial  9/10: Loss = 0.012722
+  Trial 10/10: Loss = 0.011062
+
+======================================================================
+EVALUATION WITH BEST PROBE
+======================================================================
+Best loss: 0.008626
+
+Test Results:
+  Overall Accuracy: 56.6% (2715/4800)
+  Positive samples: 64.9% (2366 samples)
+  Negative samples: 48.5% (2434 samples)
+
+✓ COMPLETE: spatial → 56.6%
+
+======================================================================
+
+Final Results:
+  object                   : 51.8%
+  attribute                : 71.8%
+  spatial                  : 56.6%
+
+  Average                  : 60.0%
+
+======================================================================
+
+=== linear_ccs.py finished at Sat Oct  3 09:23:11 CEST 2026 with exit code: 0 ===
