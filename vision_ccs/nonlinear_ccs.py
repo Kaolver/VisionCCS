@@ -51,6 +51,18 @@ CONFIG = {
     # before every category, so results don't depend on category order.
     # ==========================================================================
     'probe_seed': 42,
+
+    # ==========================================================================
+    # CHANGED (MLP stability): learning rate 1e-3 for the MLP probe instead of
+    # the shared 0.01. At 0.01, AdamW can push all ReLU units dead at once:
+    # the MLP output becomes constant, gradients are exactly zero and the probe
+    # never recovers (observed for the supervised MLP on LLaVA VG: loss jumps
+    # to ln 2 = 0.693147, every output 0.5). 1e-3 is the original notebook's
+    # default, which is how the notebook trains its MLPProbe; the paper's 0.01
+    # stays in use for the linear probes. Same value in nonlinear_supervised.py
+    # so both non-linear probes keep an identical training procedure.
+    # ==========================================================================
+    'ccs_lr': 1e-3,
 }
 
 
@@ -136,6 +148,7 @@ def train_ccs_probe_nonlinear(pos_hiddens, neg_hiddens, labels, config):
     print(f"  Test:  {n_test} samples ({n_test_pos} pos, {n_test_neg} neg)")
     print(f"  Hidden dim: {pos_hiddens.shape[1]}")
     print(f"  MLP hidden size: {config['mlp_hidden_size']}")
+    print(f"  Learning rate: {config['ccs_lr']}")
 
     # Multiple random restarts (avoid local minima)
     best_loss = float('inf')

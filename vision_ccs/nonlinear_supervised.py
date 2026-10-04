@@ -42,6 +42,12 @@ CONFIG = {
     # CHANGED (reproducibility): seed for torch (MLP initialisation), same
     # value as in nonlinear_ccs.py. Re-seeded before every category.
     'probe_seed': 42,
+
+    # CHANGED (MLP stability): learning rate 1e-3 instead of the shared 0.01,
+    # same as nonlinear_ccs.py (see the comment there). At 0.01 all ReLU units
+    # died mid-training on LLaVA VG (loss stuck at ln 2, every output 0.5).
+    # 1e-3 is the original notebook's default for training its MLPProbe.
+    'ccs_lr': 1e-3,
 }
 
 
@@ -55,6 +61,7 @@ def main():
     chosen_model_name = CONFIG.get(model_key, CONFIG['chosen_model'])
     print(f"{chosen_model_name} + Contrast Pairs + Supervised NON-LINEAR (MLP) Probe")
     print(f"Dataset: {CONFIG['dataset']} (categories: {CONFIG['categories']})")
+    print(f"Probe learning rate: {CONFIG['ccs_lr']}")
 
     all_results = {}
 
