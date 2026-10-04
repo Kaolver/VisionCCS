@@ -9,6 +9,7 @@ NVIDIA A100-SXM4-40GB, 40960 MiB
 --------------------------------------------------------------------
 === running nonlinear_ccs.py ===
 Model: llava-hf/llava-1.5-7b-hf — CCS with NON-LINEAR (MLP) probe
+Dataset: vqa2 (categories: ['object_detection', 'attribute_recognition', 'spatial_recognition'])
 
 ######################################################################
 # CATEGORY: OBJECT_DETECTION
@@ -21,43 +22,51 @@ EXTRACTING HIDDEN STATES: OBJECT_DETECTION
   Loading from: hidden_states_cache_final/cache_object_detection_1306_llava_ccs_aligned.npz
   Loaded: pos=(1306, 4096), neg=(1306, 4096)
 
-Logistic regression sanity-check accuracy: 78.3%
+Logistic regression sanity-check accuracy: 79.0%
 
 ======================================================================
 TRAINING CCS PROBE (NON-LINEAR / MLP)
 ======================================================================
 
+Feature check:
+  pos_train: zero-variance dims = 0, non-finite values after normalization = 0
+  neg_train: zero-variance dims = 0, non-finite values after normalization = 0
+  pos_test : zero-variance dims = 0, non-finite values after normalization = 0
+  neg_test : zero-variance dims = 0, non-finite values after normalization = 0
+
 Dataset split:
-  Train: 653 samples (340 pos, 313 neg)
-  Test:  653 samples (313 pos, 340 neg)
+  Train: 783 samples (402 pos, 381 neg)
+  Test:  523 samples (251 pos, 272 neg)
   Hidden dim: 4096
   MLP hidden size: 100
+  Learning rate: 0.001
 
 ======================================================================
 TRAINING WITH MULTIPLE RANDOM RESTARTS
 ======================================================================
-  Trial  1/10: Loss = 0.099541
-  Trial  2/10: Loss = 0.033693
-  Trial  3/10: Loss = 0.042880
-  Trial  4/10: Loss = 0.099541
-  Trial  5/10: Loss = 0.068913
-  Trial  6/10: Loss = 0.123850
-  Trial  7/10: Loss = 0.033691
-  Trial  8/10: Loss = 0.056662
-  Trial  9/10: Loss = 0.027572
-  Trial 10/10: Loss = 0.032160
+  Trial  1/10: Loss = 0.000031
+  Trial  2/10: Loss = 0.000030
+  Trial  3/10: Loss = 0.000030
+  Trial  4/10: Loss = 0.000025
+  Trial  5/10: Loss = 0.000021
+  Trial  6/10: Loss = 0.000027
+  Trial  7/10: Loss = 0.000025
+  Trial  8/10: Loss = 0.000028
+  Trial  9/10: Loss = 0.000024
+  Trial 10/10: Loss = 0.014090
 
 ======================================================================
 EVALUATION WITH BEST PROBE
 ======================================================================
-Best loss: 0.027572
+Best loss: 0.000021
+Test output check: non-finite = 0/523, min = 0.0000, max = 1.0000, std = 0.422137
 
 Test Results:
-  Overall Accuracy: 84.1% (549/653)
-  Positive samples: 85.9% (313 samples)
-  Negative samples: 82.4% (340 samples)
+  Overall Accuracy: 73.4% (384/523)
+  Positive samples: 75.3% (251 samples)
+  Negative samples: 71.7% (272 samples)
 
-✓ COMPLETE: object_detection → 84.1%
+✓ COMPLETE: object_detection → 73.4%
 
 ######################################################################
 # CATEGORY: ATTRIBUTE_RECOGNITION
@@ -76,37 +85,45 @@ Logistic regression sanity-check accuracy: 73.6%
 TRAINING CCS PROBE (NON-LINEAR / MLP)
 ======================================================================
 
+Feature check:
+  pos_train: zero-variance dims = 0, non-finite values after normalization = 0
+  neg_train: zero-variance dims = 0, non-finite values after normalization = 0
+  pos_test : zero-variance dims = 0, non-finite values after normalization = 0
+  neg_test : zero-variance dims = 0, non-finite values after normalization = 0
+
 Dataset split:
-  Train: 1683 samples (859 pos, 824 neg)
-  Test:  1683 samples (824 pos, 859 neg)
+  Train: 2019 samples (1030 pos, 989 neg)
+  Test:  1347 samples (653 pos, 694 neg)
   Hidden dim: 4096
   MLP hidden size: 100
+  Learning rate: 0.001
 
 ======================================================================
 TRAINING WITH MULTIPLE RANDOM RESTARTS
 ======================================================================
-  Trial  1/10: Loss = 0.146766
-  Trial  2/10: Loss = 0.033293
-  Trial  3/10: Loss = 0.027363
-  Trial  4/10: Loss = 0.054667
-  Trial  5/10: Loss = 0.092780
-  Trial  6/10: Loss = 0.068925
-  Trial  7/10: Loss = 0.042787
-  Trial  8/10: Loss = 0.042200
-  Trial  9/10: Loss = 0.073124
-  Trial 10/10: Loss = 0.051696
+  Trial  1/10: Loss = 0.000058
+  Trial  2/10: Loss = 0.000068
+  Trial  3/10: Loss = 0.000056
+  Trial  4/10: Loss = 0.000055
+  Trial  5/10: Loss = 0.000088
+  Trial  6/10: Loss = 0.000075
+  Trial  7/10: Loss = 0.018394
+  Trial  8/10: Loss = 0.000058
+  Trial  9/10: Loss = 0.000063
+  Trial 10/10: Loss = 0.000073
 
 ======================================================================
 EVALUATION WITH BEST PROBE
 ======================================================================
-Best loss: 0.027363
+Best loss: 0.000055
+Test output check: non-finite = 0/1347, min = 0.0000, max = 1.0000, std = 0.431101
 
 Test Results:
-  Overall Accuracy: 67.0% (1128/1683)
-  Positive samples: 58.0% (824 samples)
-  Negative samples: 75.7% (859 samples)
+  Overall Accuracy: 76.1% (1025/1347)
+  Positive samples: 74.7% (653 samples)
+  Negative samples: 77.4% (694 samples)
 
-✓ COMPLETE: attribute_recognition → 67.0%
+✓ COMPLETE: attribute_recognition → 76.1%
 
 ######################################################################
 # CATEGORY: SPATIAL_RECOGNITION
@@ -119,53 +136,61 @@ EXTRACTING HIDDEN STATES: SPATIAL_RECOGNITION
   Loading from: hidden_states_cache_final/cache_spatial_recognition_976_llava_ccs_aligned.npz
   Loaded: pos=(976, 4096), neg=(976, 4096)
 
-Logistic regression sanity-check accuracy: 70.5%
+Logistic regression sanity-check accuracy: 71.9%
 
 ======================================================================
 TRAINING CCS PROBE (NON-LINEAR / MLP)
 ======================================================================
 
+Feature check:
+  pos_train: zero-variance dims = 0, non-finite values after normalization = 0
+  neg_train: zero-variance dims = 0, non-finite values after normalization = 0
+  pos_test : zero-variance dims = 0, non-finite values after normalization = 0
+  neg_test : zero-variance dims = 0, non-finite values after normalization = 0
+
 Dataset split:
-  Train: 488 samples (240 pos, 248 neg)
-  Test:  488 samples (248 pos, 240 neg)
+  Train: 585 samples (289 pos, 296 neg)
+  Test:  391 samples (199 pos, 192 neg)
   Hidden dim: 4096
   MLP hidden size: 100
+  Learning rate: 0.001
 
 ======================================================================
 TRAINING WITH MULTIPLE RANDOM RESTARTS
 ======================================================================
-  Trial  1/10: Loss = 0.087579
-  Trial  2/10: Loss = 0.118862
-  Trial  3/10: Loss = 0.098361
-  Trial  4/10: Loss = 0.149594
-  Trial  5/10: Loss = 0.174202
-  Trial  6/10: Loss = 0.073774
-  Trial  7/10: Loss = 0.100417
-  Trial  8/10: Loss = 0.145492
-  Trial  9/10: Loss = 0.053285
-  Trial 10/10: Loss = 0.059438
+  Trial  1/10: Loss = 0.000036
+  Trial  2/10: Loss = 0.000068
+  Trial  3/10: Loss = 0.000036
+  Trial  4/10: Loss = 0.001757
+  Trial  5/10: Loss = 0.000033
+  Trial  6/10: Loss = 0.039362
+  Trial  7/10: Loss = 0.039343
+  Trial  8/10: Loss = 0.003255
+  Trial  9/10: Loss = 0.039351
+  Trial 10/10: Loss = 0.000031
 
 ======================================================================
 EVALUATION WITH BEST PROBE
 ======================================================================
-Best loss: 0.053285
+Best loss: 0.000031
+Test output check: non-finite = 0/391, min = 0.0000, max = 1.0000, std = 0.393770
 
 Test Results:
-  Overall Accuracy: 58.0% (283/488)
-  Positive samples: 53.2% (248 samples)
-  Negative samples: 62.9% (240 samples)
+  Overall Accuracy: 68.8% (269/391)
+  Positive samples: 70.4% (199 samples)
+  Negative samples: 67.2% (192 samples)
 
-✓ COMPLETE: spatial_recognition → 58.0%
+✓ COMPLETE: spatial_recognition → 68.8%
 
 ======================================================================
 
 Final Results (CCS, non-linear MLP probe):
-  object_detection         : 84.1%
-  attribute_recognition    : 67.0%
-  spatial_recognition      : 58.0%
+  object_detection         : 73.4%
+  attribute_recognition    : 76.1%
+  spatial_recognition      : 68.8%
 
-  Average                  : 69.7%
+  Average                  : 72.8%
 
 ======================================================================
 
-=== nonlinear_ccs.py finished at Sat Sep 26 00:57:29 CEST 2026 with exit code: 0 ===
+=== nonlinear_ccs.py finished at Sun Oct  4 23:24:13 CEST 2026 with exit code: 0 ===

@@ -9,6 +9,8 @@ NVIDIA A100-SXM4-40GB, 40960 MiB
 --------------------------------------------------------------------
 === running nonlinear_supervised.py ===
 Qwen/Qwen2-VL-7B-Instruct + Contrast Pairs + Supervised NON-LINEAR (MLP) Probe
+Dataset: vqa2 (categories: ['object_detection', 'attribute_recognition', 'spatial_recognition'])
+Probe learning rate: 0.001
 
 ######################################################################
 # CATEGORY: OBJECT_DETECTION
@@ -25,18 +27,31 @@ EXTRACTING HIDDEN STATES: OBJECT_DETECTION
 SUPERVISED NON-LINEAR (MLP) PROBE
 ======================================================================
 
+Feature check:
+  pos_train: zero-variance dims = 0, non-finite values after normalization = 0
+  neg_train: zero-variance dims = 0, non-finite values after normalization = 0
+  pos_test : zero-variance dims = 0, non-finite values after normalization = 0
+  neg_test : zero-variance dims = 0, non-finite values after normalization = 0
+
 Dataset split:
   Train: 783 samples (402 pos, 381 neg)
   Test:  523 samples (251 pos, 272 neg)
   Hidden dim: 3584
+  Epoch    1/1000: Loss = 0.689704
+  Epoch  201/1000: Loss = 0.037622
+  Epoch  401/1000: Loss = 0.033744
+  Epoch  601/1000: Loss = 0.033690
+  Epoch  801/1000: Loss = 0.033670
+  Epoch 1000/1000: Loss = 0.033660
+Test output check: non-finite = 0/523, min = 0.0000, max = 1.0000, std = 0.457592
 
 Results:
-  Train Accuracy: 94.4%
-  Test Accuracy:  88.3%
-  Positive samples: 89.2% (251 samples)
-  Negative samples: 87.5% (272 samples)
+  Train Accuracy: 95.1%
+  Test Accuracy:  87.8%
+  Positive samples: 86.9% (251 samples)
+  Negative samples: 88.6% (272 samples)
 
-✓ COMPLETE: object_detection → 88.3%
+✓ COMPLETE: object_detection → 87.8%
 
 ######################################################################
 # CATEGORY: ATTRIBUTE_RECOGNITION
@@ -53,18 +68,31 @@ EXTRACTING HIDDEN STATES: ATTRIBUTE_RECOGNITION
 SUPERVISED NON-LINEAR (MLP) PROBE
 ======================================================================
 
+Feature check:
+  pos_train: zero-variance dims = 0, non-finite values after normalization = 0
+  neg_train: zero-variance dims = 0, non-finite values after normalization = 0
+  pos_test : zero-variance dims = 0, non-finite values after normalization = 0
+  neg_test : zero-variance dims = 0, non-finite values after normalization = 0
+
 Dataset split:
   Train: 2019 samples (1030 pos, 989 neg)
   Test:  1347 samples (653 pos, 694 neg)
   Hidden dim: 3584
+  Epoch    1/1000: Loss = 0.689673
+  Epoch  201/1000: Loss = 0.044967
+  Epoch  401/1000: Loss = 0.041791
+  Epoch  601/1000: Loss = 0.039957
+  Epoch  801/1000: Loss = 0.039212
+  Epoch 1000/1000: Loss = 0.039182
+Test output check: non-finite = 0/1347, min = 0.0000, max = 1.0000, std = 0.445958
 
 Results:
-  Train Accuracy: 91.8%
-  Test Accuracy:  82.3%
-  Positive samples: 83.3% (653 samples)
+  Train Accuracy: 94.6%
+  Test Accuracy:  83.0%
+  Positive samples: 84.8% (653 samples)
   Negative samples: 81.3% (694 samples)
 
-✓ COMPLETE: attribute_recognition → 82.3%
+✓ COMPLETE: attribute_recognition → 83.0%
 
 ######################################################################
 # CATEGORY: SPATIAL_RECOGNITION
@@ -81,28 +109,41 @@ EXTRACTING HIDDEN STATES: SPATIAL_RECOGNITION
 SUPERVISED NON-LINEAR (MLP) PROBE
 ======================================================================
 
+Feature check:
+  pos_train: zero-variance dims = 0, non-finite values after normalization = 0
+  neg_train: zero-variance dims = 0, non-finite values after normalization = 0
+  pos_test : zero-variance dims = 0, non-finite values after normalization = 0
+  neg_test : zero-variance dims = 0, non-finite values after normalization = 0
+
 Dataset split:
   Train: 585 samples (289 pos, 296 neg)
   Test:  391 samples (199 pos, 192 neg)
   Hidden dim: 3584
+  Epoch    1/1000: Loss = 0.690818
+  Epoch  201/1000: Loss = 0.019352
+  Epoch  401/1000: Loss = 0.019061
+  Epoch  601/1000: Loss = 0.017830
+  Epoch  801/1000: Loss = 0.017804
+  Epoch 1000/1000: Loss = 0.017794
+Test output check: non-finite = 0/391, min = 0.0000, max = 1.0000, std = 0.418721
 
 Results:
-  Train Accuracy: 95.0%
-  Test Accuracy:  76.7%
-  Positive samples: 75.4% (199 samples)
-  Negative samples: 78.1% (192 samples)
+  Train Accuracy: 97.4%
+  Test Accuracy:  77.0%
+  Positive samples: 76.4% (199 samples)
+  Negative samples: 77.6% (192 samples)
 
-✓ COMPLETE: spatial_recognition → 76.7%
+✓ COMPLETE: spatial_recognition → 77.0%
 
 ======================================================================
 
 Final Results (supervised, non-linear MLP probe):
-  object_detection         : 88.3%
-  attribute_recognition    : 82.3%
-  spatial_recognition      : 76.7%
+  object_detection         : 87.8%
+  attribute_recognition    : 83.0%
+  spatial_recognition      : 77.0%
 
-  Average                  : 82.4%
+  Average                  : 82.6%
 
 ======================================================================
 
-=== nonlinear_supervised.py finished at Sat Sep 19 11:38:05 CEST 2026 with exit code: 0 ===
+=== nonlinear_supervised.py finished at Sun Oct  4 23:22:31 CEST 2026 with exit code: 0 ===
