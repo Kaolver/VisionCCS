@@ -1,0 +1,149 @@
+host    : gcn5.local.snellius.surf.nl
+workdir : /gpfs/home6/mdemirev/VisionCCS/vision_ccs
+python  : /gpfs/home6/mdemirev/VisionCCS/vision_ccs/venv/bin/python
+cuda    : True NVIDIA A100-SXM4-40GB MIG 3g.20gb
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+NVIDIA A100-SXM4-40GB, 40960 MiB
+--------------------------------------------------------------------
+=== running nonlinear_supervised.py ===
+llava-hf/llava-1.5-7b-hf + Contrast Pairs + Supervised NON-LINEAR (MLP) Probe
+Dataset: vg (categories: ['object', 'attribute', 'spatial'])
+Probe learning rate: 0.001
+
+######################################################################
+# CATEGORY: OBJECT
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: OBJECT
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_object_12000_llava_ccs_aligned.npz
+  Loaded: pos=(12000, 4096), neg=(12000, 4096)
+
+======================================================================
+SUPERVISED NON-LINEAR (MLP) PROBE
+======================================================================
+
+Feature check:
+  pos_train: zero-variance dims = 0, non-finite values after normalization = 0
+  neg_train: zero-variance dims = 0, non-finite values after normalization = 0
+  pos_test : zero-variance dims = 0, non-finite values after normalization = 0
+  neg_test : zero-variance dims = 0, non-finite values after normalization = 0
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 4096
+  Epoch    1/1000: Loss = 0.692127
+  Epoch  201/1000: Loss = 0.068087
+  Epoch  401/1000: Loss = 0.060757
+  Epoch  601/1000: Loss = 0.059060
+  Epoch  801/1000: Loss = 0.058531
+  Epoch 1000/1000: Loss = 0.058270
+Test output check: non-finite = 0/4800, min = 0.0000, max = 1.0000, std = 0.431292
+
+Results:
+  Train Accuracy: 92.2%
+  Test Accuracy:  82.5%
+  Positive samples: 82.4% (2366 samples)
+  Negative samples: 82.7% (2434 samples)
+
+✓ COMPLETE: object → 82.5%
+
+######################################################################
+# CATEGORY: ATTRIBUTE
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: ATTRIBUTE
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_attribute_12000_llava_ccs_aligned.npz
+  Loaded: pos=(12000, 4096), neg=(12000, 4096)
+
+======================================================================
+SUPERVISED NON-LINEAR (MLP) PROBE
+======================================================================
+
+Feature check:
+  pos_train: zero-variance dims = 0, non-finite values after normalization = 0
+  neg_train: zero-variance dims = 0, non-finite values after normalization = 0
+  pos_test : zero-variance dims = 0, non-finite values after normalization = 0
+  neg_test : zero-variance dims = 0, non-finite values after normalization = 0
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 4096
+  Epoch    1/1000: Loss = 0.689961
+  Epoch  201/1000: Loss = 0.077143
+  Epoch  401/1000: Loss = 0.070656
+  Epoch  601/1000: Loss = 0.069621
+  Epoch  801/1000: Loss = 0.068286
+  Epoch 1000/1000: Loss = 0.068069
+Test output check: non-finite = 0/4800, min = 0.0000, max = 1.0000, std = 0.434388
+
+Results:
+  Train Accuracy: 91.2%
+  Test Accuracy:  81.6%
+  Positive samples: 83.1% (2366 samples)
+  Negative samples: 80.1% (2434 samples)
+
+✓ COMPLETE: attribute → 81.6%
+
+######################################################################
+# CATEGORY: SPATIAL
+######################################################################
+
+======================================================================
+EXTRACTING HIDDEN STATES: SPATIAL
+======================================================================
+✓ Found cached hidden states!
+  Loading from: hidden_states_cache_final/cache_vg_spatial_12000_llava_ccs_aligned.npz
+  Loaded: pos=(12000, 4096), neg=(12000, 4096)
+
+======================================================================
+SUPERVISED NON-LINEAR (MLP) PROBE
+======================================================================
+
+Feature check:
+  pos_train: zero-variance dims = 0, non-finite values after normalization = 0
+  neg_train: zero-variance dims = 0, non-finite values after normalization = 0
+  pos_test : zero-variance dims = 0, non-finite values after normalization = 0
+  neg_test : zero-variance dims = 0, non-finite values after normalization = 0
+
+Dataset split:
+  Train: 7200 samples (3634 pos, 3566 neg)
+  Test:  4800 samples (2366 pos, 2434 neg)
+  Hidden dim: 4096
+  Epoch    1/1000: Loss = 0.691110
+  Epoch  201/1000: Loss = 0.086420
+  Epoch  401/1000: Loss = 0.077519
+  Epoch  601/1000: Loss = 0.074879
+  Epoch  801/1000: Loss = 0.073507
+  Epoch 1000/1000: Loss = 0.072927
+Test output check: non-finite = 0/4800, min = 0.0000, max = 1.0000, std = 0.421165
+
+Results:
+  Train Accuracy: 90.9%
+  Test Accuracy:  83.2%
+  Positive samples: 82.9% (2366 samples)
+  Negative samples: 83.4% (2434 samples)
+
+✓ COMPLETE: spatial → 83.2%
+
+======================================================================
+
+Final Results (supervised, non-linear MLP probe):
+  object                   : 82.5%
+  attribute                : 81.6%
+  spatial                  : 83.2%
+
+  Average                  : 82.4%
+
+======================================================================
+
+=== nonlinear_supervised.py finished at Sat Oct  3 18:32:48 CEST 2026 with exit code: 0 ===
