@@ -213,3 +213,21 @@ __marimo__/
 /venv_ccs/
 *.txt
 *.html
+
+# Cached hidden states and activation dumps: large and regenerable.
+hidden_states_cache*/
+caches_v3/
+*.npz
+*.html
+
+# Downloaded benchmark annotations (see pope_to_vqa.py).
+/pope/
+
+# Analysis outputs are deliberately NOT ignored: reanalysis_*.json,
+# ablation_*.json, layer_sweep*.json and transfer*.json are small, and
+# committing them keeps a reported claim traceable to the run behind it.
+# (The old reanalysis_results*.json rule matched no filename the scripts
+# actually write, so it is dropped rather than widened.)
+
+# Regenerated from vg/*.jsonl by vg_to_vqa.py on every VG zero-shot job.
+vision_ccs/vg_mapped.json

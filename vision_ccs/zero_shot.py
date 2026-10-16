@@ -1,0 +1,309 @@
+"""Compute zero-shot Yes/No baseline logits and accuracy."""
+
+# ============================================================================
+# NOTE (review): ROLE OF THIS FILE
+# Zero-shot Yes/No baseline (Burns et al. Sec 3.1 '0-shot' / 'calibrated'),
+# which vision_ccs.py does not have. It scores the model's own next-token
+# logits for Yes vs No at the generation position. Output zeroshot_<model>_
+# <cat>.npz follows reanalysis.build_pairs(mode='ccs') minus this run's own
+# missing-image skips -- which need NOT match the extractor's, so the npz also
+# stores question_ids and compare_zeroshot.py joins on those rather than on row
+# position.
+# ============================================================================
+import argparse
+import gc
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+
+from reanalysis import build_pairs, CATEGORIES
+import prompts as P
+
+# several surface forms because tokenizers distinguish 'Yes' from ' Yes' (leading
+# space) and casing; each form may start with a different token id
+YES_FORMS = ['Yes', ' Yes', 'yes', ' yes', 'YES']
+NO_FORMS = ['No', ' No', 'no', ' no', 'NO']
+
+
+def _first_token_ids(tokenizer, forms):
+    """Ids of the first token of each surface form, deduplicated."""
+    ids = []
+    for f in forms:
+        # only the FIRST token of each form matters: the model's next-token distribution
+        # is over single tokens, so 'Yes' is scored by the id its first sub-token gets
+        enc = tokenizer.encode(f, add_special_tokens=False)
+        # FIXED: LLaVA's SentencePiece tokenizer encodes ' Yes' as a bare '▁'
+        # (id 29871) followed by '▁Yes', and ' No' likewise, so the first token
+        # was the same pure-space id for both answers and the yes/no sets
+        # overlapped (the run aborted as degenerate). Whitespace-only tokens
+        # carry no answer, so skip to the first token with text in it.
+        enc = [t for t in enc if tokenizer.decode([t]).strip()]
+        if enc:
+            ids.append(enc[0])
+    # deduplicate: ' Yes' and 'Yes' may map to the same first id in some tokenizers
+    return sorted(set(ids))
+
+
+def answer_token_forms(template):
+    """Surface forms to score for this template's answer words.
+
+    Case and leading-space variants are all scored and maxed, so tokenizer
+    quirks don't decide the baseline.
+    """
+    pos_word, neg_word = P.answer_words(template)
+
+    def forms(w):
+        return [w, ' ' + w, w.lower(), ' ' + w.lower(),
+                w.capitalize(), ' ' + w.capitalize()]
+
+    return forms(pos_word), forms(neg_word)
+
+
+def find_image(image_id, image_dirs):
+    name = f'{image_id:012d}.jpg' if isinstance(image_id, int) else image_id
+    for d in image_dirs:
+        p = Path(d) / name
+        if p.exists():
+            return p
+    return None
+
+
+def load_model(model_tag, cfg_paths, device):
+    import torch
+    if model_tag == 'llava':
+        from transformers import LlavaProcessor, LlavaForConditionalGeneration
+        proc = LlavaProcessor.from_pretrained(cfg_paths['llava'], use_fast=False)
+        model = LlavaForConditionalGeneration.from_pretrained(
+            cfg_paths['llava'],
+            torch_dtype=torch.bfloat16 if device == 'cuda' else torch.float32,
+            device_map='auto' if device == 'cuda' else None)
+    elif model_tag in ('qwen2', 'qwen2_5'):
+        from transformers import AutoProcessor
+        if model_tag == 'qwen2':
+            from transformers import Qwen2VLForConditionalGeneration as Cls
+        else:
+            from transformers import Qwen2_5_VLForConditionalGeneration as Cls
+        proc = AutoProcessor.from_pretrained(cfg_paths[model_tag], trust_remote_code=True)
+        model = Cls.from_pretrained(
+            cfg_paths[model_tag],
+            torch_dtype=torch.bfloat16 if device == 'cuda' else torch.float32,
+            device_map='auto' if device == 'cuda' else None,
+            trust_remote_code=True)
+    else:
+        raise ValueError(f'unknown model {model_tag!r}')
+    if device == 'cpu':
+        model = model.to(device)
+    model.eval()
+    return model, proc
+
+
+# ============================================================================
+# NOTE POTENTIAL MISMATCH (by design): this prompt ENDS with the generation
+# prompt (ASSISTANT: / add_generation_prompt=True) so the model answers,
+# whereas CCS extraction ends with the statement + EOS. --no-instruction drops
+# the extra 'Answer yes or no.' hint that CCS never sees.
+# The question body is prompts.zeroshot_prefix(template, ...) -- the same format
+# string extract.py renders, truncated before the answer word -- so that half of
+# the parity is mechanical rather than asserted.
+# ============================================================================
+def build_inputs(model_tag, proc, image, question, instruction=True,
+                 template='plain'):
+    """Build input prompt stopping before the answer, generation prompt on."""
+    q = P.zeroshot_prefix(template, question)
+    # optional task hint; CCS extraction never sees it, hence the --no-instruction
+    # switch so both variants can be reported
+    if instruction:
+        q = f'{q} Answer yes or no.'
+    if model_tag == 'llava':
+        # ends with the assistant cue so the NEXT token is the model's answer
+        prompt = f'USER: <image>\n{q}\nASSISTANT:'
+        return proc(images=image, text=prompt, return_tensors='pt')
+
+    from qwen_vl_utils import process_vision_info
+    messages = [{'role': 'user', 'content': [
+        {'type': 'image', 'image': image},
+        {'type': 'text', 'text': q}]}]
+    text = proc.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    imgs, vids = process_vision_info(messages)
+    return proc(text=[text], images=imgs, videos=vids, padding=True, return_tensors='pt')
+
+
+# ============================================================================
+# NOTE (review): rank-based calibration: the top half of items by (yes - no)
+# logit margin are predicted 'yes', so exactly 50% are yes regardless of the
+# model's bias. Uses a stable sort so bf16 ties resolve deterministically.
+# ============================================================================
+
+#Yes: 3,653
+#No: 3,728
+#Total: 7,381 so calliberation makes sense and can outperform ccs
+def calibrate(margin):
+    """Burns' calibrated zero-shot, rank-based: the top half of items by margin
+    are predicted yes, so the prediction rate is exactly 50/50 regardless of the
+    model's yes-bias.
+
+    Rank-based rather than `margin > median` because these logits are bf16, so
+    margins are quantised and ties are common. With enough mass sitting exactly
+    at the median a `>` threshold collapses to predicting one class for
+    everything. Ranking breaks ties deterministically and cannot degenerate.
+    """
+    # rank-based 50/50 rule, step by step:
+    margin = np.asarray(margin, dtype=float)
+    n = len(margin)
+    # mergesort is STABLE: equal margins keep their original order, so ties (common
+    # with bf16 logits) are broken deterministically instead of arbitrarily
+    order = np.argsort(margin, kind='mergesort')
+    preds = np.zeros(n, dtype=int)
+    # order[...] lists items from smallest to largest margin; the last n//2 entries
+    # are the n//2 largest margins -> predicted yes. For odd n that is floor(n/2).
+    preds[order[n - n // 2:]] = 1          # top half -> yes
+    return preds
+
+def calibrated_accuracy(margin, labels):
+    """Calibrated zero-shot accuracy. Also returns the median margin, which is
+    reported only as a descriptive statistic."""
+    preds = calibrate(margin)
+    # the median is reported for reading only; the decision above did not use it
+    return float((preds == np.asarray(labels)).mean()), float(np.median(margin))
+
+
+# ============================================================================
+# NOTE (review): per item, yes_logit = max over first-token ids of the YES
+# surface forms, no_logit likewise; raw accuracy thresholds margin > 0,
+# calibrated accuracy uses calibrate(). Kept items ARE recorded by question_id;
+# skipped ones are simply absent, which is what lets the downstream join detect
+# a coverage gap instead of silently misaligning.
+# ============================================================================
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument('--model', default='qwen2', choices=['llava', 'qwen2', 'qwen2_5'])
+    ap.add_argument('--categories', nargs='+', default=CATEGORIES)
+    ap.add_argument('--vqa-json', default='./vqav2_mapped.json')
+    # 'validation' is the folder name martin's linear_ccs.py uses on Snellius;
+    # 'val' is kept for older copies. A missing folder is harmless, but a missing
+    # image is a silent skip, so check 'skipped' in the summary.
+    ap.add_argument('--image-dirs', nargs='+', default=[
+        '/scratch-nvme/ml-datasets/coco/train/data',
+        '/scratch-nvme/ml-datasets/coco/validation/data',
+        '/scratch-nvme/ml-datasets/coco/val/data'])
+    ap.add_argument('--out-dir', default='./zeroshot')
+    ap.add_argument('--no-instruction', action='store_true',
+                    help='drop "Answer yes or no." so the prompt matches what CCS '
+                         'extraction sees (removes a hint zero-shot got and CCS did not)')
+    ap.add_argument('--tag', default='',
+                    help='suffix for output filenames, to keep variants separate')
+    ap.add_argument('--template', default='plain', choices=P.ALL_TEMPLATES,
+                    help='surface form to match against CCS extraction')
+    ap.add_argument('--limit', type=int, default=None,
+                    help='cap items per category (for a quick smoke test)')
+    args = ap.parse_args()
+
+    import torch
+    from PIL import Image
+
+    paths = {'llava': 'llava-hf/llava-1.5-7b-hf',
+             'qwen2': 'Qwen/Qwen2-VL-7B-Instruct',
+             'qwen2_5': 'Qwen/Qwen2.5-VL-7B-Instruct'}
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f'device={device}  model={args.model}')
+
+    model, proc = load_model(args.model, paths, device)
+    tok = proc.tokenizer
+    # token ids whose logits will be compared: the global forms plus whatever
+    # answer words this template actually uses
+    yes_forms, no_forms = answer_token_forms(args.template)
+    yes_ids = _first_token_ids(tok, sorted(set(YES_FORMS + yes_forms)))
+    no_ids = _first_token_ids(tok, sorted(set(NO_FORMS + no_forms)))
+    print(f'template {args.template!r} -> prefix example: '
+          f'{P.zeroshot_prefix(args.template, "Is there a dog")!r}')
+    print(f'yes token ids {yes_ids} -> {tok.convert_ids_to_tokens(yes_ids)}')
+    print(f'no  token ids {no_ids} -> {tok.convert_ids_to_tokens(no_ids)}')
+    # sanity: both sets non-empty and disjoint, otherwise yes/no cannot be separated
+    if not yes_ids or not no_ids or set(yes_ids) & set(no_ids):
+        print('!! degenerate answer-token ids; aborting'); return 1
+
+    out_dir = Path(args.out_dir); out_dir.mkdir(exist_ok=True)
+    summary = {}
+
+    for category in args.categories:
+        pairs = build_pairs(args.vqa_json, category, mode='ccs')
+        if args.limit:
+            pairs = pairs[:args.limit]
+        # question_ids are the join key compare_zeroshot.py uses; this loop and
+        # the extraction loop skip items independently, so positional alignment
+        # between the two artefacts is an assumption, not a fact.
+        yl, nl, labels, qids, iids, skipped = [], [], [], [], [], 0
+
+        for i, p in enumerate(pairs):
+            path = find_image(p['image_id'], args.image_dirs)
+            if path is None:
+                skipped += 1
+                continue
+            try:
+                image = Image.open(path).convert('RGB')
+                inputs = build_inputs(args.model, proc, image, p['question'],
+                                      instruction=not args.no_instruction,
+                                      template=args.template)
+                inputs = {k: (v.to(device) if hasattr(v, 'to') else v)
+                          for k, v in inputs.items()}
+                with torch.no_grad():
+                    # logits[0, -1] = next-token scores at the LAST prompt position (after
+                    # 'ASSISTANT:'), i.e. the distribution the model would sample its answer from
+                    logits = model(**inputs).logits[0, -1].float().cpu().numpy()
+                # score of 'yes' = best-scoring yes surface form (max over its token ids)
+                yl.append(float(logits[yes_ids].max()))
+                nl.append(float(logits[no_ids].max()))
+                labels.append(p['label'])
+                qids.append(p['question_id'])
+                iids.append(p['image_id'])
+            except Exception as e:
+                print(f"  error on {p['image_id']}: {e}")
+                skipped += 1
+            if device == 'cuda' and i % 200 == 0:
+                torch.cuda.empty_cache()
+            if i % 500 == 0:
+                print(f'  {category}: {i}/{len(pairs)}')
+
+        yl = np.array(yl); nl = np.array(nl); labels = np.array(labels)
+        gc.collect()
+        if len(labels) == 0:
+            print(f'{category}: nothing extracted'); continue
+
+        # positive margin = model prefers 'Yes'
+        margin = yl - nl
+        # raw accuracy: threshold at 0 (the model's own bias is left in)
+        raw = float(((margin > 0).astype(int) == labels).mean())
+        # calibrated accuracy: threshold moved so exactly half are predicted yes
+        # (Burns et al. Sec 3.1, 'calibrated zero-shot')
+        cal, thr = calibrated_accuracy(margin, labels)
+        # how often the UNcalibrated model says yes: reveals its yes/no bias
+        yes_rate = float((margin > 0).mean())
+
+        f = out_dir / f'zeroshot_{args.model}{args.tag}_{category}.npz'
+        np.savez(f, yes_logit=yl, no_logit=nl, labels=labels,
+                 question_ids=np.array(qids), image_ids=np.array(iids),
+                 template=np.array(args.template))
+        summary[category] = {'n': int(len(labels)), 'skipped': int(skipped),
+                             'raw_acc': raw, 'calibrated_acc': cal,
+                             'median_margin': thr, 'predicted_yes_rate': yes_rate,
+                             'true_yes_rate': float(labels.mean()),
+                             'template': args.template,
+                             'instruction': not args.no_instruction,
+                             'file': str(f)}
+        print(f'\n{category}: n={len(labels)} skipped={skipped}')
+        print(f'  raw acc        {raw:.1%}   (predicts yes {yes_rate:.1%} of the time)')
+        print(f'  calibrated acc {cal:.1%}   (median margin {thr:+.3f})\n')
+
+    (out_dir / f'zeroshot_{args.model}{args.tag}_summary.json').write_text(json.dumps(summary, indent=2))
+    print('\n' + '=' * 70)
+    print(f"{'category':26s} {'n':>6s} {'raw':>8s} {'calibrated':>11s}")
+    for c, s in summary.items():
+        print(f"{c:26s} {s['n']:6d} {s['raw_acc']:8.1%} {s['calibrated_acc']:11.1%}")
+    print('=' * 70)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
