@@ -231,3 +231,9 @@ caches_v3/
 
 # Regenerated from vg/*.jsonl by vg_to_vqa.py on every VG zero-shot job.
 vision_ccs/vg_mapped.json
+
+# text_ccs: regenerable data, caches and smoke-test output
+vision_ccs/text_ccs/data/
+caches_text*/
+text_ccs_smoke_results/
+text_ccs_smoke_report/
