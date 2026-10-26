@@ -114,8 +114,8 @@ def text_vs_vision(R):
     rows = []
     for m in ('llava', 'qwen2', 'qwen2_5'):
         r = [NAMES[m]]
-        for src, pos in (('text-raw', 'final'), ('text-chat', 'final'),
-                         ('vision-vqa', 'final'), ('vision-vg', 'final')):
+        for src, pos in (('text-raw', 'answer'), ('text-chat', 'answer'),
+                         ('vision-vqa', 'answer'), ('vision-vg', 'answer')):
             if (m, src) in R:
                 a = averaged(R[(m, src)], pos)
                 r += [pct(a['ccs']), pct(a['lr_tuned'])]
@@ -146,25 +146,26 @@ def layer_curves(R, position='final'):
     return '\n'.join(out)
 
 
-def verdict(R):
+def verdict(R, pos='answer'):
     lines = []
     g = R.get(('gptj', 'text-raw'))
-    if g:
-        a = averaged(g, 'final')
+    if not g:
+        lines.append('- **Reproduction:** no GPT-J result yet.')
+    for label, p in (('last answer token', 'answer'), ('EOS token', 'final')):
+        if not g:
+            break
+        a = averaged(g, p)
         gap = 100 * a['ccs'] - PAPER['GPT-J']['CCS']
-        lines.append(f'- **Reproduction (GPT-J, raw, last layer):** CCS {pct(a["ccs"])} vs '
+        lines.append(f'- **Reproduction (GPT-J, raw, last layer, {label}):** CCS {pct(a["ccs"])} vs '
                      f'{PAPER["GPT-J"]["CCS"]} in the paper ({gap:+.1f}), LR {pct(a["lr"])} vs '
                      f'{PAPER["GPT-J"]["LR"]}, calibrated 0-shot {pct(a["zs_cal"])} vs '
                      f'{PAPER["GPT-J"]["cal 0-shot"]}. '
-                     + ('Within 5 points of the paper.' if abs(gap) <= 5 else
-                        'More than 5 points off the paper: check prompts and normalization first.'))
-    else:
-        lines.append('- **Reproduction:** no GPT-J result yet.')
+                     + ('Within 5 points of the paper.' if abs(gap) <= 5 else 'More than 5 points off the paper.'))
     for m in ('llava', 'qwen2', 'qwen2_5'):
         t = R.get((m, 'text-raw'))
         if not t:
             continue
-        a = averaged(t, 'final')
+        a = averaged(t, pos)
         s = (f'- **{NAMES[m]}, text only:** CCS {pct(a["ccs"])}, calibrated 0-shot '
              f'{pct(a["zs_cal"])}, LR {pct(a["lr"])} (tuned {pct(a["lr_tuned"])}). ')
         lrs = [x for x in (a['lr'], a['lr_tuned']) if x is not None]
@@ -172,11 +173,11 @@ def verdict(R):
         s += ('0-shot <= CCS <= LR holds. ' if ok_order else '0-shot <= CCS <= LR does not hold. ')
         base = next((k for k, v in VLM_OF.items() if v == m), None)
         if base and (base, 'text-raw') in R:
-            b = averaged(R[(base, 'text-raw')], 'final')
+            b = averaged(R[(base, 'text-raw')], pos)
             s += f'Its language model {NAMES[base]}: CCS {pct(b["ccs"])}. '
         for vs in ('vision-vqa', 'vision-vg'):
             if (m, vs) in R:
-                v = averaged(R[(m, vs)], 'final')
+                v = averaged(R[(m, vs)], pos)
                 s += f'Same evaluator on {vs[7:].upper()} images: CCS {pct(v["ccs"])}, LR {pct(v["lr_tuned"])}. '
         lines.append(s)
     return '\n'.join(lines)
@@ -196,9 +197,10 @@ def main():
           +', '.join(f'{m}/{s}' for m, s in sorted(R)) + '.\n',
           '## Reading\n', verdict(R), '']
     for src, pos, title in (
-            ('text-raw', 'final', 'Paper protocol: raw text, last layer, last token (EOS, as in the released code)'),
-            ('text-raw', 'answer', 'Raw text, last layer, last answer token (Algorithm 1, no EOS)'),
-            ('text-chat', 'final', 'Chat-template format (as the vision pipeline), last layer, last token')):
+            ('text-raw', 'answer', 'Paper protocol: raw text, last layer, last answer token (Algorithm 1)'),
+            ('text-raw', 'final', 'Raw text, last layer, appended EOS token (released code)'),
+            ('text-chat', 'answer', 'Chat-template format, last layer, last answer token'),
+            ('text-chat', 'final', 'Chat-template format, last layer, last token (as the vision pipeline)')):
         t, notes = table1(R, src, pos)
         if t:
             md += [f'## {title}\n', t, '', 'Datasets per model: ' + '; '.join(notes) + '.', '']
@@ -207,7 +209,7 @@ def main():
             t = per_dataset(R, src, 'final', key)
             if t:
                 md += [f'## Per dataset: {label}, {src}, last layer\n', t, '']
-    md += ['## Same evaluator, text vs images (last layer, last token)\n', text_vs_vision(R), '']
+    md += ['## Same evaluator, text vs images (last layer, last answer token)\n', text_vs_vision(R), '']
     md += ['## Layer curves (mean over datasets)\n', layer_curves(R)]
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)

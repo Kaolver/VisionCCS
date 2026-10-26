@@ -36,7 +36,9 @@ Datasets: IMDB, Amazon, AG News, DBpedia-14, RTE, QNLI, COPA, BoolQ, PIQA.
 Protocol: per-prompt normalization, CCS with 10 restarts of 1000 epochs at
 lr 0.01, LR on the concatenated pair with C = 1 and with C tuned on train,
 calibrated zero-shot from answer log-probs. Scored at every 4th layer at the
-last token, and at the last answer token on the last layer.
+last token, and at the last answer token on the last layer. The last answer
+token (Algorithm 1) reproduces the paper's GPT-J numbers; the appended EOS
+token does not (CCS at chance), so the report reads results at the answer token.
 
 Prompts: 5 to 8 per dataset (the paper used 8 to 13). The ones printed in the
 paper's Appendix I are verbatim (`burns`); the rest paraphrase promptsource
