@@ -1,6 +1,6 @@
 """Download the text datasets and write label-balanced pools to text_ccs/data/.
 
-Needs internet and pyarrow; run once on the login node from vision_ccs/.
+Needs internet and pyarrow==17.0.0; run once on the login node from vision_ccs/.
 Story Cloze is left out: it is only distributed through a request form.
 """
 import argparse

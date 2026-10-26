@@ -47,7 +47,8 @@ def load(model_tag, device):
     from transformers import AutoModelForCausalLM, AutoTokenizer
     dtype = torch.bfloat16 if device == 'cuda' else torch.float32
     rev = {'revision': REVISIONS[model_tag]} if model_tag in REVISIONS else {}
-    tok = AutoTokenizer.from_pretrained(path, **rev)
+    # Vicuna ships only a SentencePiece model; load it slow, as extract.py does for LLaVA
+    tok = AutoTokenizer.from_pretrained(path, use_fast=model_tag != 'vicuna', **rev)
     model = AutoModelForCausalLM.from_pretrained(
         path, torch_dtype=dtype, device_map='auto' if device == 'cuda' else None,
         use_safetensors=True, **rev)

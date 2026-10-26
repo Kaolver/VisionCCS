@@ -4,7 +4,7 @@ set -e
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 mkdir -p text_ccs/jobs/logs
 if [ ! -f text_ccs/data/imdb.jsonl ]; then
-  echo "no text_ccs/data/*.jsonl yet: run  pip install pyarrow && python text_ccs/prepare_data.py  first" >&2
+  echo "no text_ccs/data/*.jsonl yet: run  pip install pyarrow==17.0.0 && python text_ccs/prepare_data.py  first" >&2
   exit 1
 fi
 [ $# -eq 0 ] && set -- 00 01 02 03 04 05 06 07 08

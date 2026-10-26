@@ -45,7 +45,7 @@ paper's Appendix I are verbatim (`burns`); the rest paraphrase promptsource
 ## Run (Snellius, from `~/VisionCCS/vision_ccs`)
 
 ```bash
-pip install pyarrow
+pip install "pyarrow==17.0.0"   # newer pyarrow needs NumPy 2; the venv has 1.26
 python text_ccs/prepare_data.py
 python text_ccs/test_text_ccs.py
 TEXT_CACHE_DIR=/scratch-shared/$USER/caches_text bash text_ccs/jobs/submit_all.sh
